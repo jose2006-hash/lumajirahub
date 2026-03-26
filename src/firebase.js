@@ -1,8 +1,8 @@
 // ================================================================
-// firebase.js — Configuración de Firebase (Vite + React)
+// firebase.js — Configuración Firebase (Vite + React)
 // ================================================================
 import { initializeApp } from "firebase/app";
-import { getFirestore, initializeFirestore } from "firebase/firestore";
+import { getFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 
 const firebaseConfig = {
@@ -16,10 +16,8 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 
-// ✅ Solución recomendada para el error 400 (Listen/channel)
-export const db = initializeFirestore(app, {
-  experimentalForceLongPolling: true,
-}, '(default)');
+// ✅ Versión más estable para Vite + React (especificando database)
+export const db = getFirestore(app, '(default)');
 
 export const auth = getAuth(app);
 
