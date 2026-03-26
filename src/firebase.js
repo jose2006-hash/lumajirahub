@@ -1,6 +1,5 @@
 // ================================================================
 // firebase.js — Configuración de Firebase
-// Copia .env.example → .env y completa tus credenciales
 // ================================================================
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
@@ -17,7 +16,14 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 
-export const db   = getFirestore(app);
+// ✅ SOLUCIÓN AL ERROR 400 en Listen/channel
+export const db = getFirestore(app, '(default)');   // ← Especificamos el nombre exacto
+
+// Recomendado: Forzar long polling (evita muchos problemas de WebChannel en Vite)
+db.settings({
+  experimentalForceLongPolling: true,
+});
+
 export const auth = getAuth(app);
 
 // ================================================================
@@ -26,9 +32,4 @@ export const auth = getAuth(app);
 //   orders/{orderId}        → pedidos publicados
 //   quotes/{quoteId}        → cotizaciones de talleres
 //   chats/{chatId}/msgs/{id} → mensajes de chat
-//
-// Estructura de un profile:
-//   type: "usuario" | "taller"
-//   name, email, whatsapp
-//   (taller) tallerName, blocked, debts: [{id,amount,date,paid,orderId}]
 // ================================================================
