@@ -1,8 +1,8 @@
 // ================================================================
-// firebase.js — Configuración de Firebase
+// firebase.js — Configuración de Firebase (Vite + React)
 // ================================================================
 import { initializeApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, initializeFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 
 const firebaseConfig = {
@@ -16,20 +16,11 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 
-// ✅ SOLUCIÓN AL ERROR 400 en Listen/channel
-export const db = getFirestore(app, '(default)');   // ← Especificamos el nombre exacto
-
-// Recomendado: Forzar long polling (evita muchos problemas de WebChannel en Vite)
-db.settings({
+// ✅ Solución recomendada para el error 400 (Listen/channel)
+export const db = initializeFirestore(app, {
   experimentalForceLongPolling: true,
-});
+}, '(default)');
 
 export const auth = getAuth(app);
 
-// ================================================================
-// Colecciones Firestore:
-//   profiles/{uid}          → datos del usuario o taller
-//   orders/{orderId}        → pedidos publicados
-//   quotes/{quoteId}        → cotizaciones de talleres
-//   chats/{chatId}/msgs/{id} → mensajes de chat
-// ================================================================
+export default app;
