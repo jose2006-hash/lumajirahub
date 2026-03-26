@@ -183,25 +183,65 @@ export default function LumajiraHub() {
     setTimeout(() => setToast(null), 4000);
   }, []);
 
-  // Firebase Auth listener
+    // ==================== FIREBASE AUTH LISTENER (MEJORADO) ====================
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (fbUser) => {
-      if (!fbUser) { setAuthUser(null); setUser(null); setView("landing"); return; }
+      console.log("🔄 onAuthStateChanged triggered →", fbUser ? fbUser.email : "No user");
+
+      if (!fbUser) {
+        setAuthUser(null);
+        setUser(null);
+        setView("landing");
+        return;
+      }
+
+      // Admin check
       if (fbUser.email === ADMIN_CREDS.email) {
         setAuthUser(fbUser);
         setUser({ id: fbUser.uid, type: "admin", name: "Administrador", email: fbUser.email });
-        setView("admin"); return;
+        setView("admin");
+        console.log("✅ Admin logueado");
+        return;
       }
+
       try {
         const snap = await getDoc(doc(db, "profiles", fbUser.uid));
-        if (!snap.exists()) { await signOut(auth); setView("landing"); return; }
+
+        if (!snap.exists()) {
+          console.warn("⚠️ Perfil no encontrado, creando uno básico...");
+          const basicProfile = {
+            type: "usuario",
+            name: fbUser.email.split("@")[0],
+            email: fbUser.email,
+            whatsapp: "",
+            createdAt: new Date().toISOString(),
+          };
+          await setDoc(doc(db, "profiles", fbUser.uid), basicProfile);
+          
+          setAuthUser(fbUser);
+          setUser({ id: fbUser.uid, ...basicProfile });
+          setView("userHome");
+          console.log("✅ Perfil creado automáticamente y usuario logueado");
+          return;
+        }
+
         let profile = { id: fbUser.uid, ...snap.data() };
-        if (profile.type === "taller") profile = await checkAndAutoBlock(fbUser.uid, profile);
+
+        if (profile.type === "taller") {
+          profile = await checkAndAutoBlock(fbUser.uid, profile);
+        }
+
         setAuthUser(fbUser);
         setUser(profile);
         setView(profile.type === "usuario" ? "userHome" : "tallerHome");
-      } catch (e) { console.error(e); setView("landing"); }
+
+        console.log("✅ Usuario cargado correctamente:", profile.type, profile.name || profile.email);
+      } catch (e) {
+        console.error("❌ Error al cargar perfil:", e);
+        setView("landing");
+      }
     });
+
     return unsub;
   }, []);
 
