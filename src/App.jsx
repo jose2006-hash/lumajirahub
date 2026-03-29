@@ -1433,3 +1433,37 @@ function Admin({ ctx }) {
     </div>
   );
 }
+import { useEffect, useState } from "react";
+
+function App() {
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+
+  useEffect(() => {
+    window.addEventListener("beforeinstallprompt", (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    });
+  }, []);
+
+  const installApp = () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then(() => {
+        setDeferredPrompt(null);
+      });
+    }
+  };
+
+  return (
+    <div>
+      <h1>Mi App</h1>
+
+      {deferredPrompt && (
+        <button onClick={installApp}>
+          Instalar app
+        </button>
+      )}
+    </div>
+  );
+}
+
