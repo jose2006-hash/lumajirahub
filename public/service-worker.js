@@ -1,7 +1,24 @@
+const CACHE_NAME = "app-cache-v1";
+const urlsToCache = [
+  "/",
+  "/index.html",
+  "/manifest.json",
+  "/icon-192.png",
+  "/icon-512.png"
+];
+
 self.addEventListener("install", (event) => {
-  console.log("Service Worker instalado");
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(urlsToCache);
+    })
+  );
 });
 
 self.addEventListener("fetch", (event) => {
-  // básico (luego puedes mejorarlo)
+  event.respondWith(
+    caches.match(event.request).then((response) => {
+      return response || fetch(event.request);
+    })
+  );
 });
