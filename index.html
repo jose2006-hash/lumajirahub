@@ -2,15 +2,26 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>LumajiraHub — Manufactura a medida</title>
-    <meta name="description" content="Conectamos clientes con talleres de Lima para hacer realidad tu proyecto. Sin intermediarios." />
+
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#F97316" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="LumajiraHub" />
+
+    <!-- Icons -->
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+
+    <!-- SEO -->
+    <meta name="description" content="Conectamos proyectos con talleres de manufactura en Lima. Impresión 3D, CNC, Láser e Inyección Plástica." />
+    <title>LumajiraHub</title>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
-<link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#0f172a">
