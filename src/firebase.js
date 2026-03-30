@@ -3,14 +3,16 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: "TU_API_KEY",
-  authDomain: "TU_AUTH_DOMAIN",
-  projectId: "TU_PROJECT_ID",
-  storageBucket: "TU_STORAGE_BUCKET",
-  messagingSenderId: "TU_SENDER_ID",
-  appId: "TU_APP_ID",
+  apiKey: "AIzaSyB1veRe34d1uuxPzb5jVshHZwO-2_hkJuM",
+  authDomain: "lumajirahub-5f72b.firebaseapp.com",
+  projectId: "lumajirahub-5f72b",
+  storageBucket: "lumajirahub-5f72b.firebasestorage.app",
+  messagingSenderId: "939486029231",
+  appId: "1:939486029231:web:c18b20e5de7a6c76597b5a",
+  measurementId: "G-D17EGFWNM8"
 };
 
 const app = initializeApp(firebaseConfig);
+
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+export const db   = getFirestore(app);
