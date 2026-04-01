@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
 import {
-  createUserWithEmailAndPassword,
+  signInAnonymously,
   signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
 } from "firebase/auth";
 import {
-  doc, getDoc, setDoc, updateDoc, collection,
+  doc, getDoc, setDoc, updateDoc,
 } from "firebase/firestore";
 import { auth, db } from "./firebase";
 
@@ -14,7 +15,6 @@ import { CSS } from "./styles";
 import { ADMIN_CREDS, DEBT_LIMIT_DAYS } from "./config";
 import { usePWAInstall } from "./hooks/usePWAInstall";
 
-// Components
 import Nav            from "./components/Nav";
 import Landing        from "./components/Landing";
 import Auth           from "./components/Auth";
@@ -62,7 +62,6 @@ export default function LumajiraHub() {
   const [showApiModal, setShowApiModal]       = useState(false);
   const [newPassword, setNewPassword]         = useState(null);
 
-  // PWA install — banner shown on all views except landing (landing has its own)
   const { isInstallable, install, dismiss } = usePWAInstall();
 
   const showToast = useCallback((msg, type = "ok") => {
@@ -77,6 +76,7 @@ export default function LumajiraHub() {
         setAuthUser(null); setUser(null); setView("landing"); return;
       }
 
+      // Admin
       if (fbUser.email === ADMIN_CREDS.email) {
         setAuthUser(fbUser);
         setUser({ id: fbUser.uid, type: "admin", name: "Administrador", email: fbUser.email });
@@ -87,30 +87,60 @@ export default function LumajiraHub() {
       try {
         const snap = await getDoc(doc(db, "profiles", fbUser.uid));
         if (!snap.exists()) {
-          const basicProfile = {
-            type: "usuario", name: fbUser.email.split("@")[0],
-            email: fbUser.email, whatsapp: "", createdAt: new Date().toISOString(),
-          };
-          await setDoc(doc(db, "profiles", fbUser.uid), basicProfile);
-          setAuthUser(fbUser); setUser({ id: fbUser.uid, ...basicProfile }); setView("userHome");
+          // Sin perfil aún (anónimo recién creado sin guardar) → landing
+          await signOut(auth);
+          setView("landing");
           return;
         }
         let profile = { id: fbUser.uid, ...snap.data() };
         if (profile.type === "taller") profile = await checkAndAutoBlock(fbUser.uid, profile);
-        setAuthUser(fbUser); setUser(profile);
+        setAuthUser(fbUser);
+        setUser(profile);
         setView(profile.type === "usuario" ? "userHome" : "tallerHome");
       } catch (e) { console.error(e); setView("landing"); }
     });
     return unsub;
   }, []);
 
-  // ── Auth helpers ─────────────────────────────────────────────────
+  // ── Login anónimo para clientes (solo nombre) ───────────────────
+  const loginAsGuest = async (name) => {
+    if (!name.trim()) {
+      showToast("Ingresa tu nombre", "err");
+      return false;
+    }
+    try {
+      const cred = await signInAnonymously(auth);
+      const profile = {
+        type: "usuario",
+        name: name.trim(),
+        email: "",
+        whatsapp: "",
+        isAnonymous: true,
+        createdAt: new Date().toISOString(),
+      };
+      await setDoc(doc(db, "profiles", cred.user.uid), profile);
+      setAuthUser(cred.user);
+      setUser({ id: cred.user.uid, ...profile });
+      setView("userHome");
+      return true;
+    } catch (e) {
+      showToast("Error al ingresar: " + e.message, "err");
+      return false;
+    }
+  };
+
+  // ── Registro de talleres ─────────────────────────────────────────
   const register = async (data, type, password) => {
     try {
       const cred = await createUserWithEmailAndPassword(auth, data.email, password);
       const profile = {
-        type, name: data.name, email: data.email, whatsapp: data.whatsapp,
-        ...(type === "taller" ? { tallerName: data.tallerName, blocked: false, debts: [] } : {}),
+        type,
+        name: data.name,
+        email: data.email,
+        whatsapp: data.whatsapp,
+        tallerName: data.tallerName,
+        blocked: false,
+        debts: [],
         createdAt: new Date().toISOString(),
       };
       await setDoc(doc(db, "profiles", cred.user.uid), profile);
@@ -127,15 +157,19 @@ export default function LumajiraHub() {
     }
   };
 
+  // ── Login de talleres / admin ────────────────────────────────────
   const login = async (email, password, type) => {
     if (type === "admin" && (email !== ADMIN_CREDS.email || password !== ADMIN_CREDS.password)) {
       showToast("Credenciales de admin incorrectas.", "err"); return false;
     }
-    try { await signInWithEmailAndPassword(auth, email, password); return true; }
-    catch (e) {
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      return true;
+    } catch (e) {
       const msg = ["auth/invalid-credential", "auth/wrong-password", "auth/user-not-found"].includes(e.code)
         ? "Correo o contraseña incorrectos." : e.message;
-      showToast(msg, "err"); return false;
+      showToast(msg, "err");
+      return false;
     }
   };
 
@@ -147,20 +181,18 @@ export default function LumajiraHub() {
     if (snap.exists()) setUser({ id: authUser.uid, ...snap.data() });
   }, [authUser]);
 
-  // ── Shared context ───────────────────────────────────────────────
   const ctx = {
     user, authUser, view, setView,
     selectedService, setSelectedService,
     selectedOrder, setSelectedOrder,
     activeChat, setActiveChat,
-    login, register, logout, refreshUser,
+    login, register, loginAsGuest, logout, refreshUser,
     showToast, authType, setAuthType,
     isRegister, setIsRegister,
     showApiModal, setShowApiModal,
     newPassword, setNewPassword,
   };
 
-  // ── Loading screen ───────────────────────────────────────────────
   if (view === "loading") return (
     <>
       <style>{CSS}</style>
@@ -176,23 +208,16 @@ export default function LumajiraHub() {
   return (
     <>
       <style>{CSS}</style>
-
-      {/* Toast */}
       {toast && (
         <div className={`toast ${toast.type}`}>
           {toast.type === "ok" ? "✓" : "✗"} {toast.msg}
         </div>
       )}
-
-      {/* Modals */}
       {showApiModal && <ApiKeyModal onClose={() => setShowApiModal(false)} showToast={showToast} />}
       {newPassword  && <PasswordModal password={newPassword} onClose={() => setNewPassword(null)} />}
-
-      {/* PWA install banner — shown on authenticated views (landing manages its own) */}
       {isInstallable && view !== "landing" && (
         <InstallBanner onInstall={install} onDismiss={dismiss} />
       )}
-
       <div className="root">
         {view === "landing"     && <Landing      ctx={ctx} />}
         {view === "auth"        && <Auth         ctx={ctx} />}
