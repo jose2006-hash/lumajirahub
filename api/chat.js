@@ -9,16 +9,15 @@ export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: "OPENAI_API_KEY no configurada" });
 
-  // Parsear body manualmente si llega como string
+  // Debug temporal — muestra si la key existe (sin revelarla completa)
+  if (!apiKey) {
+    return res.status(500).json({ error: "OPENAI_API_KEY no configurada en Vercel" });
+  }
+
   let body = req.body;
   if (typeof body === "string") {
     try { body = JSON.parse(body); } catch { body = {}; }
-  }
-
-  if (!body || !body.messages) {
-    return res.status(400).json({ error: "Body inválido, falta 'messages'" });
   }
 
   try {
@@ -28,11 +27,25 @@ export default async function handler(req, res) {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${apiKey}`,
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        model: body.model || "gpt-4o",
+        max_tokens: body.max_tokens || 1000,
+        messages: body.messages || [],
+      }),
     });
 
     const data = await response.json();
-    return res.status(response.status).json(data);
+
+    // Si OpenAI devuelve error, pasarlo al cliente para debug
+    if (!response.ok) {
+      return res.status(response.status).json({
+        error: data?.error?.message || "Error de OpenAI",
+        code: data?.error?.code,
+        type: data?.error?.type,
+      });
+    }
+
+    return res.status(200).json(data);
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }
