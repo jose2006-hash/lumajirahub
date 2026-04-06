@@ -7,6 +7,13 @@ import { db } from "../firebase";
 import { SERVICES } from "../config";
 import Nav from "./Nav";
 
+// Convierte cualquier valor a string de forma segura
+const safe = (val) => {
+  if (val === null || val === undefined) return "";
+  if (typeof val === "object") return JSON.stringify(val);
+  return String(val);
+};
+
 export default function MyOrders({ ctx }) {
   const [orders, setOrders] = useState([]);
   const [quotes, setQuotes] = useState([]);
@@ -67,6 +74,20 @@ export default function MyOrders({ ctx }) {
     }
   };
 
+  const formatDate = (val) => {
+    try {
+      if (!val) return "";
+      if (typeof val.toDate === "function") return val.toDate().toLocaleDateString("es-PE");
+      if (typeof val === "string") return new Date(val).toLocaleDateString("es-PE");
+      return "";
+    } catch { return ""; }
+  };
+
+  const truncate = (val, max = 200) => {
+    const str = typeof val === "string" ? val : safe(val);
+    return str.length > max ? str.slice(0, max) + "..." : str;
+  };
+
   return (
     <div>
       <Nav ctx={ctx} title="Mis Pedidos" />
@@ -92,27 +113,31 @@ export default function MyOrders({ ctx }) {
             {orders.map((order) => {
               const myQ = quotes.filter((q) => q.orderId === order.id);
               const svc = SERVICES.find((s) => s.id === order.service);
+              const titulo = safe(order.brief?.titulo || order.serviceName);
+              const descripcion = truncate(order.brief?.descripcion);
               return (
                 <div key={order.id} className="card" style={{ padding: 24, borderLeft: `3px solid ${svc?.accent || "#F97316"}` }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
                     <div>
-                      <div style={{ fontWeight: 800, fontSize: 17 }}>{order.brief?.titulo || order.serviceName}</div>
+                      <div style={{ fontWeight: 800, fontSize: 17 }}>{titulo}</div>
                       <div style={{ fontSize: 12, color: "#71717A", marginTop: 2 }}>
-                        <span className="tag" style={{ marginRight: 8 }}>{order.serviceName}</span>
-                        {order.createdAt?.toDate ? order.createdAt.toDate().toLocaleDateString("es-PE") : ""}
+                        <span className="tag" style={{ marginRight: 8 }}>{safe(order.serviceName)}</span>
+                        {formatDate(order.createdAt)}
                       </div>
                     </div>
                     <span className={`badge ${order.status === "open" ? "badge-open" : "badge-closed"}`}>
                       {order.status === "open" ? "● Abierto" : "✓ Cerrado"}
                     </span>
                   </div>
+
                   <div style={{ fontSize: 13, color: "#A1A1AA", lineHeight: 1.55, marginBottom: 14 }}>
-                    {order.brief?.descripcion?.slice(0, 200)}{order.brief?.descripcion?.length > 200 ? "..." : ""}
+                    {descripcion}
                   </div>
+
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
                     {order.images?.length > 0 && <span style={{ fontSize: 12, color: "#52525B" }}>🖼️ {order.images.length} imagen(es)</span>}
-                    {order.audio && <span style={{ fontSize: 12, color: "#52525B" }}>🎙️ {order.audio}</span>}
-                    {order.cadFile && <span style={{ fontSize: 12, color: "#60A5FA" }}>📐 {order.cadFile}</span>}
+                    {order.audio && <span style={{ fontSize: 12, color: "#52525B" }}>🎙️ {safe(order.audio)}</span>}
+                    {order.cadFile && <span style={{ fontSize: 12, color: "#60A5FA" }}>📐 {safe(order.cadFile)}</span>}
                   </div>
 
                   {myQ.length > 0 ? (
@@ -123,17 +148,17 @@ export default function MyOrders({ ctx }) {
                       {myQ.map((q) => (
                         <div key={q.id} className="card" style={{ padding: 18, marginBottom: 10, background: "#0F0F11" }}>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                            <div style={{ fontWeight: 700 }}>🏭 {q.tallerName}</div>
+                            <div style={{ fontWeight: 700 }}>🏭 {safe(q.tallerName)}</div>
                             <span className={`badge ${q.status === "closed" ? "badge-closed" : "badge-pending"}`}>
                               {q.status === "closed" ? "✓ Trato cerrado" : "⏳ Pendiente"}
                             </span>
                           </div>
                           <div style={{ display: "flex", flexWrap: "wrap", gap: 14, fontSize: 13, color: "#A1A1AA", marginBottom: 12 }}>
-                            <span>💰 S/ {q.price}</span>
-                            <span>📍 {q.location}</span>
-                            <span>📅 {q.deliveryDate}</span>
+                            <span>💰 S/ {safe(q.price)}</span>
+                            <span>📍 {safe(q.location)}</span>
+                            <span>📅 {safe(q.deliveryDate)}</span>
                           </div>
-                          {q.notes && <div style={{ fontSize: 12, color: "#71717A", marginBottom: 12 }}>{q.notes}</div>}
+                          {q.notes && <div style={{ fontSize: 12, color: "#71717A", marginBottom: 12 }}>{safe(q.notes)}</div>}
                           {q.status !== "closed" && order.status === "open" && (
                             <div style={{ display: "flex", gap: 8 }}>
                               <button className="btn-ghost btn-sm" onClick={() => {
@@ -143,13 +168,13 @@ export default function MyOrders({ ctx }) {
                                 💬 Chatear con el taller
                               </button>
                               <button className="btn-success" onClick={() => closeDeal(q)}>
-                                ✓ Cerrar trato — S/ {q.price}
+                                ✓ Cerrar trato — S/ {safe(q.price)}
                               </button>
                             </div>
                           )}
                           {q.status === "closed" && (
                             <div style={{ fontSize: 13, color: "#4ade80", fontWeight: 600 }}>
-                              ✓ Trato cerrado por S/ {q.dealAmount}
+                              ✓ Trato cerrado por S/ {safe(q.dealAmount)}
                             </div>
                           )}
                         </div>
