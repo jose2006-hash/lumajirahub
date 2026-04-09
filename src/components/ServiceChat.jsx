@@ -1,328 +1,215 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
 import { CAD_ACCEPT } from "../config";
 import Nav from "./Nav";
 
-// ── Llamada al proxy de Vercel ───────────────────────────────────
-async function callAI(systemPrompt, messages) {
+async function callAI(messages) {
   const res = await fetch("/api/chat", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "gpt-4o",
-      max_tokens: 1200,
-      messages: [
-        { role: "system", content: systemPrompt },
-        ...messages.map(m => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.content })),
-      ],
-    }),
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({ model:"gpt-4o", max_tokens:1200, messages }),
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();
   return data.choices?.[0]?.message?.content || "{}";
 }
 
-// ── Materiales con datos visuales ────────────────────────────────
-const MATERIALS = {
-  "3d": [
-    { id:"pla",   name:"PLA",    color:"#34D399", icon:"🌿", desc:"Fácil de imprimir. Ideal para modelos decorativos, prototipos y piezas de baja carga.", pros:"Económico · Muchos colores · Biodegradable", cons:"No resistente al calor", best:"Figurillas, decoración, prototipos" },
-    { id:"abs",   name:"ABS",    color:"#F97316", icon:"⚙️", desc:"Resistente y duradero. Bueno para piezas funcionales que soportan impactos.", pros:"Resistente · Mecanizable", cons:"Requiere recinto cerrado", best:"Piezas funcionales, carcasas" },
-    { id:"petg",  name:"PETG",   color:"#60A5FA", icon:"💎", desc:"Lo mejor de PLA y ABS. Resistente al agua y químicos.", pros:"Flexible · Resistente agua", cons:"Stringing si mal calibrado", best:"Contenedores, piezas mecánicas" },
-    { id:"tpu",   name:"TPU",    color:"#A78BFA", icon:"🤸", desc:"Flexible como goma. Perfecto para piezas que necesitan doblar.", pros:"Muy flexible · Resistente", cons:"Impresión lenta", best:"Fundas, juntas, sillas" },
-    { id:"resin", name:"Resina", color:"#F59E0B", icon:"✨", desc:"Alta resolución. Para figuras detalladas y joyería.", pros:"Detalle extremo · Superficie suave", cons:"Frágil · Post-proceso", best:"Figurillas, joyería, miniaturas" },
+const MATS = {
+  "3d":[
+    {id:"pla",  name:"PLA",    emoji:"🌿",color:"#30D158",sub:"Económico · Decorativo",   best:"Figuras, prototipos, regalos"},
+    {id:"abs",  name:"ABS",    emoji:"⚙️",color:"#FF6B35",sub:"Resistente · Funcional",   best:"Carcasas, piezas mecánicas"},
+    {id:"petg", name:"PETG",   emoji:"💧",color:"#0A84FF",sub:"Flexible · Resistente agua",best:"Contenedores, piezas mixtas"},
+    {id:"tpu",  name:"TPU",    emoji:"🤸",color:"#BF5AF2",sub:"Tipo goma · Flexible",     best:"Fundas, juntas, agarre"},
+    {id:"resin",name:"Resina", emoji:"✨",color:"#FFD60A",sub:"Ultra detalle · Fino",     best:"Miniaturas, joyería, figuras"},
   ],
-  "cnc": [
-    { id:"alum", name:"Aluminio", color:"#94A3B8", icon:"🔩", desc:"Ligero y resistente. El más usado en CNC para piezas funcionales.", pros:"Ligero · Mecanizable · Anticorrosivo", cons:"Costo medio", best:"Piezas mecánicas, soportes" },
-    { id:"acero",name:"Acero",   color:"#64748B", icon:"⚙️", desc:"Máxima resistencia. Para piezas de alta exigencia.", pros:"Muy resistente · Duradero", cons:"Pesado · Más caro", best:"Ejes, engranajes, estructuras" },
-    { id:"mad",  name:"Madera",  color:"#A16207", icon:"🌳", desc:"Ideal para CNC de corte y grabado. MDF, pino, cedro.", pros:"Económico · Fácil · Estético", cons:"No apto exterior sin tratar", best:"Mobiliario, señalética, decoración" },
-    { id:"acri", name:"Acrílico",color:"#EC4899", icon:"🔮", desc:"Plástico rígido transparente o de colores. Excelente para displays.", pros:"Estético · Ligero · Colores", cons:"Se raya fácil", best:"Displays, señalética, maquetas" },
+  "cnc":[
+    {id:"alum", name:"Aluminio", emoji:"🔩",color:"#98989D",sub:"Ligero · Resistente",   best:"Piezas mecánicas, soportes"},
+    {id:"acero",name:"Acero",    emoji:"⚙️",color:"#636366",sub:"Máxima resistencia",    best:"Ejes, engranajes, estructuras"},
+    {id:"mad",  name:"Madera",   emoji:"🌳",color:"#A1845C",sub:"Cálido · Económico",    best:"Muebles, señalética, arte"},
+    {id:"acri", name:"Acrílico", emoji:"💎",color:"#FF375F",sub:"Visual · Transparente", best:"Displays, letreros, arte"},
   ],
-  "laser": [
-    { id:"mdf",  name:"MDF",     color:"#A16207", icon:"🪵", desc:"El más popular para corte láser. Suave, fácil y económico.", pros:"Económico · Fácil corte", cons:"No apto humedad", best:"Packaging, decoración, maquetas" },
-    { id:"acri2",name:"Acrílico",color:"#EC4899", icon:"💜", desc:"Corte preciso y grabado excelente. Transparente o de color.", pros:"Estético · Preciso", cons:"Bordes calientes al cortar", best:"Señalética, displays, joyas" },
-    { id:"cuero",name:"Cuero",   color:"#92400E", icon:"👜", desc:"Grabado láser en cuero genuino o sintético.", pros:"Estético · Personalizable", cons:"Solo grabado (no corte profundo)", best:"Billeteras, fundas, regalos" },
-    { id:"tela", name:"Tela",    color:"#7C3AED", icon:"🧵", desc:"Corte de precisión en tela sin deshilachado.", pros:"Corte limpio", cons:"Algunos materiales se queman", best:"Ropa, accesorios, bordados" },
+  "laser":[
+    {id:"mdf",  name:"MDF",      emoji:"🪵",color:"#A1845C",sub:"Popular · Económico",  best:"Packaging, maquetas, deco"},
+    {id:"acri2",name:"Acrílico", emoji:"💜",color:"#BF5AF2",sub:"Estético · Preciso",   best:"Señalética, displays, joyas"},
+    {id:"cuero",name:"Cuero",    emoji:"👜",color:"#8E4D20",sub:"Premium · Cálido",     best:"Billeteras, fundas, regalos"},
+    {id:"tela", name:"Tela",     emoji:"🧵",color:"#5E5CE6",sub:"Corte limpio",         best:"Ropa, bordados, accesorios"},
   ],
-  "plastic": [
-    { id:"pp",   name:"Polipropileno", color:"#10B981", icon:"🥤", desc:"Resistente a químicos y flexión. El más usado en industria.", pros:"Resistente · Ligero · Económico", cons:"Difícil de pintar", best:"Envases, tapas, piezas industriales" },
-    { id:"pe",   name:"Polietileno",   color:"#06B6D4", icon:"🧴", desc:"Muy flexible y resistente al impacto. Botellas, bolsas.", pros:"Flexible · Económico", cons:"Baja resistencia térmica", best:"Envases, tapas, juguetes" },
-    { id:"abs2", name:"ABS",           color:"#F97316", icon:"⚙️", desc:"Rígido y resistente. El estándar en piezas de consumo.", pros:"Resistente · Fácil procesar", cons:"No resistente UV sin aditivos", best:"Electrodomésticos, carcasas, autos" },
-    { id:"nylon",name:"Nylon",         color:"#8B5CF6", icon:"🔧", desc:"Alta resistencia mecánica y térmica. Para piezas de ingeniería.", pros:"Muy resistente · Duradero", cons:"Absorbe humedad", best:"Engranajes, rodamientos, piezas técnicas" },
+  "plastic":[
+    {id:"pp",   name:"Polipropileno",emoji:"🥤",color:"#30D158",sub:"Industrial · Ligero",  best:"Envases, tapas, industria"},
+    {id:"abs2", name:"ABS",          emoji:"📦",color:"#FF6B35",sub:"Rígido · Resistente",  best:"Electrodomésticos, carcasas"},
+    {id:"nylon",name:"Nylon",        emoji:"🔧",color:"#BF5AF2",sub:"Alta ingeniería",      best:"Engranajes, piezas técnicas"},
+    {id:"pe",   name:"Polietileno",  emoji:"🧴",color:"#0A84FF",sub:"Flexible · Económico", best:"Envases, juguetes, bolsas"},
   ],
 };
 
-// ── Quick reply suggestions por contexto ────────────────────────
-const getQuickReplies = (text, serviceId) => {
-  const t = text.toLowerCase();
-  if (t.includes("material") || t.includes("¿qué material")) {
-    return serviceId === "3d"
-      ? ["PLA (económico)", "ABS (resistente)", "PETG (intermedio)", "Resina (detalle fino)"]
-      : serviceId === "cnc"
-      ? ["Aluminio", "Acero", "Madera", "Acrílico"]
-      : serviceId === "laser"
-      ? ["MDF", "Acrílico", "Cuero", "Tela"]
-      : ["Polipropileno", "ABS", "Nylon", "Polietileno"];
-  }
-  if (t.includes("dimensi") || t.includes("medida") || t.includes("tamaño")) {
-    return ["Muy pequeño (<5cm)", "Pequeño (5-15cm)", "Mediano (15-30cm)", "Grande (>30cm)"];
-  }
-  if (t.includes("cantidad") || t.includes("cuántas") || t.includes("unidades")) {
-    return ["1-5 unidades", "6-20 unidades", "21-100 unidades", "Más de 100"];
-  }
-  if (t.includes("plazo") || t.includes("cuándo") || t.includes("urgente")) {
-    return ["Urgente (1-3 días)", "Normal (1 semana)", "Sin prisa (2+ semanas)"];
-  }
-  if (t.includes("uso") || t.includes("para qué")) {
-    return ["Uso personal", "Regalo", "Prototipo/prueba", "Producción/venta"];
-  }
-  if (t.includes("acabado") || t.includes("pintura") || t.includes("color")) {
-    return ["Sin acabado", "Pintado de un color", "Varios colores", "Acabado premium"];
-  }
+const LIC_KW = ["pokemon","disney","marvel","dc ","naruto","anime","figura","figurilla","personaje","cartoon","funko","lego","one piece","dragon ball","spiderman","batman","sonic","mario","pikachu","minion"];
+const CMP_KW = ["3d scan","escultura","logo","marca","relieve","grabado detall","geometría compleja","modelo 3d","diseño cad","stl","step","iges"];
+const detectLic = t => LIC_KW.some(k=>t.toLowerCase().includes(k));
+const detectCmp = t => CMP_KW.some(k=>t.toLowerCase().includes(k));
+
+const ctxChips = (botText, svcId) => {
+  const t = botText.toLowerCase();
+  if (t.includes("material")) return svcId==="3d"?["PLA","ABS","PETG","Resina"]:svcId==="cnc"?["Aluminio","Acero","Madera","Acrílico"]:svcId==="laser"?["MDF","Acrílico","Cuero"]:["PP","ABS","Nylon"];
+  if (t.includes("cantidad")||t.includes("cuántas")||t.includes("unidades")) return ["1 unidad","2-10","10-50","Más de 50"];
+  if (t.includes("dimensi")||t.includes("medida")||t.includes("tamaño")) return ["<5cm","5-15cm","15-30cm",">30cm"];
+  if (t.includes("plazo")||t.includes("urgente")||t.includes("cuándo")) return ["Urgente (1-3 días)","1 semana","Sin apuro"];
+  if (t.includes("uso")||t.includes("para qué")||t.includes("destino")) return ["Uso personal","Regalo","Prototipo","Producción"];
+  if (t.includes("acabado")||t.includes("pintura")||t.includes("color")) return ["Sin acabado","Un color","Multicolor","Acabado premium"];
   return [];
 };
 
-// ── Detecta si la pieza es compleja ─────────────────────────────
-const isComplex = (text) => {
-  const keywords = ["pokemon","figura","anime","cartoon","personaje","logo","marca","relieve","grabado","detall","escultura","3d scan","cad","stl","step","diseño"];
-  return keywords.some(k => text.toLowerCase().includes(k));
-};
-
-// ── Detecta IP de personaje ──────────────────────────────────────
-const isLicensed = (text) => {
-  const chars = ["pokemon","pikachu","mario","disney","marvel","dc comic","naruto","dragon ball","minion","sonic","star wars","batman","spiderman","one piece","looney","peppa"];
-  return chars.some(k => text.toLowerCase().includes(k));
-};
-
-// ── Chip de sugerencia ───────────────────────────────────────────
-const Chip = ({ label, onClick }) => (
-  <button onClick={onClick} style={{
-    background:"#18181B", border:"1px solid #27272A", borderRadius:20,
-    padding:"7px 14px", fontSize:12, fontWeight:600, color:"#A1A1AA",
-    cursor:"pointer", transition:"all .15s", fontFamily:"inherit",
-    whiteSpace:"nowrap",
-  }}
-    onMouseEnter={e=>{e.target.style.borderColor="#F97316";e.target.style.color="#FAFAFA";}}
-    onMouseLeave={e=>{e.target.style.borderColor="#27272A";e.target.style.color="#A1A1AA";}}
-  >
-    {label}
-  </button>
-);
-
-// ── Tarjeta de material ──────────────────────────────────────────
-const MaterialCard = ({ mat, accent, onSelect }) => (
-  <div onClick={()=>onSelect(mat.name)} style={{
-    background:"#18181B", border:`1px solid #27272A`, borderRadius:12,
-    padding:"14px 16px", cursor:"pointer", transition:"all .2s",
-    borderLeft:`3px solid ${mat.color}`,
-  }}
-    onMouseEnter={e=>{e.currentTarget.style.borderColor=mat.color;e.currentTarget.style.transform="translateY(-2px)";}}
-    onMouseLeave={e=>{e.currentTarget.style.borderColor="#27272A";e.currentTarget.style.borderLeftColor=mat.color;e.currentTarget.style.transform="none";}}
-  >
-    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
-      <span style={{fontSize:20}}>{mat.icon}</span>
-      <span style={{fontWeight:800,fontSize:14,color:mat.color}}>{mat.name}</span>
-    </div>
-    <div style={{fontSize:12,color:"#A1A1AA",lineHeight:1.5,marginBottom:8}}>{mat.desc}</div>
-    <div style={{fontSize:11,color:"#52525B"}}>✅ {mat.best}</div>
+const TypingDots = ({accent}) => (
+  <div style={{display:"flex",gap:5,padding:"13px 15px",background:"var(--ink-2)",border:"1px solid var(--ink-3)",borderRadius:"20px 20px 20px 5px",width:"fit-content"}}>
+    {[0,1,2].map(i=>(
+      <span key={i} style={{width:7,height:7,borderRadius:"50%",background:accent||"var(--accent)",display:"inline-block",animation:`typingDot 1.2s ${i*0.2}s infinite`}}/>
+    ))}
   </div>
 );
 
-// ── Banner de upload ─────────────────────────────────────────────
-const UploadHint = ({ onUpload, isLic }) => (
-  <div style={{background:"#0c1a3a",border:"1px solid #1e3a6e",borderRadius:12,padding:16,marginTop:8}}>
-    <div style={{fontSize:13,fontWeight:700,color:"#93c5fd",marginBottom:6}}>
-      {isLic ? "⚠️ Personaje con derechos de autor" : "📐 Pieza compleja detectada"}
+const Chip = ({label,onClick}) => (
+  <button className="chip" onClick={()=>onClick(label)}>{label}</button>
+);
+
+const MatCard = ({mat,onSelect}) => (
+  <button onClick={()=>onSelect(mat.name)} style={{
+    background:"var(--ink-2)",border:`1px solid var(--ink-3)`,borderLeft:`3px solid ${mat.color}`,
+    borderRadius:14,padding:"13px 14px",cursor:"pointer",textAlign:"left",width:"100%",
+    transition:"all .2s var(--spring)",fontFamily:"inherit",
+  }}
+    onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="var(--shadow)";}}
+    onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="none";}}
+  >
+    <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:5}}>
+      <span style={{fontSize:18}}>{mat.emoji}</span>
+      <span style={{fontWeight:700,fontSize:13,color:mat.color}}>{mat.name}</span>
     </div>
-    <div style={{fontSize:12,color:"#71717A",lineHeight:1.55,marginBottom:12}}>
-      {isLic
-        ? "Para reproducir personajes con copyright necesitas el archivo 3D original o autorización. Te recomendamos subir tu propio diseño CAD."
-        : "Para piezas con alto detalle o geometría compleja, subir un archivo CAD (STL, STEP, OBJ) garantiza que los talleres cotizan exactamente lo que necesitas."
+    <div style={{fontSize:11,color:"var(--fog)",marginBottom:4}}>{mat.sub}</div>
+    <div style={{fontSize:11,color:"var(--mist)"}}>✅ {mat.best}</div>
+  </button>
+);
+
+const UploadHint = ({onUpload,licensed}) => (
+  <div style={{background:"rgba(10,132,255,.07)",border:"1px solid rgba(10,132,255,.2)",borderRadius:14,padding:"15px 17px",animation:"bubbleIn .3s var(--spring) both"}}>
+    <div style={{fontWeight:700,fontSize:13,color:"#0A84FF",marginBottom:6}}>
+      {licensed?"⚠️ Personaje con derechos de autor":"📐 Pieza compleja — sube tu diseño"}
+    </div>
+    <div style={{fontSize:12,color:"var(--mist)",lineHeight:1.6,marginBottom:12}}>
+      {licensed
+        ?"Para reproducir personajes con copyright (Pokémon, Disney, etc.) necesitas el archivo 3D original. Sube tu diseño CAD para cotizar con precisión."
+        :"Para piezas con geometría compleja, subir un archivo CAD (STL, STEP, OBJ) garantiza cotizaciones exactas."
       }
     </div>
-    <button onClick={onUpload} style={{
-      background:"#1e3a6e",border:"1px solid #2563eb",borderRadius:8,
-      padding:"8px 16px",fontSize:12,fontWeight:700,color:"#93c5fd",
-      cursor:"pointer",fontFamily:"inherit",
-    }}>
-      📁 Subir archivo CAD / diseño
+    <button onClick={onUpload} style={{background:"rgba(10,132,255,.15)",border:"1px solid rgba(10,132,255,.3)",borderRadius:9,padding:"8px 16px",fontSize:12,fontWeight:600,color:"#0A84FF",cursor:"pointer",fontFamily:"inherit"}}>
+      📁 Subir archivo →
     </button>
   </div>
 );
 
-// ── Mensaje del chat ─────────────────────────────────────────────
-const Bubble = ({ msg, svc, onChip, onMaterial, onUpload, showMats, showUpload, chips, isLic }) => {
-  const isBot = msg.role === "assistant";
+const Bubble = ({msg,svc,onChip,onMatSelect,onUpload}) => {
+  const isBot = msg.role==="assistant";
   return (
-    <div style={{display:"flex",flexDirection:"column",alignItems:isBot?"flex-start":"flex-end",gap:6}}>
-      <div style={{
-        background: isBot ? "#27272A" : "#F97316",
-        color:"#FAFAFA",
-        borderRadius: isBot ? "18px 18px 18px 4px" : "18px 18px 4px 18px",
-        padding:"12px 16px", maxWidth:"80%",
-        fontSize:14, lineHeight:1.55, whiteSpace:"pre-wrap",
-      }}>
-        {msg.content}
-      </div>
-
-      {/* Materiales visuales */}
-      {isBot && showMats && MATERIALS[svc.id] && (
-        <div style={{width:"100%",maxWidth:480}}>
-          <div style={{fontSize:11,fontWeight:700,color:"#71717A",textTransform:"uppercase",letterSpacing:".08em",marginBottom:8,paddingLeft:4}}>
-            Elige el material →
-          </div>
+    <div style={{display:"flex",flexDirection:"column",alignItems:isBot?"flex-start":"flex-end",gap:10}}>
+      <div className={isBot?"bubble-bot":"bubble-me"}>{msg.content}</div>
+      {isBot&&msg.showMats&&MATS[svc?.id]&&(
+        <div style={{width:"100%",maxWidth:460,animation:"bubbleIn .3s var(--spring) both"}}>
+          <div style={{fontSize:11,fontWeight:600,color:"var(--mist)",textTransform:"uppercase",letterSpacing:".07em",marginBottom:8}}>Elige el material →</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-            {MATERIALS[svc.id].map(m=>(
-              <MaterialCard key={m.id} mat={m} accent={svc.accent} onSelect={onMaterial}/>
-            ))}
+            {MATS[svc.id].map(m=><MatCard key={m.id} mat={m} onSelect={onMatSelect}/>)}
           </div>
         </div>
       )}
-
-      {/* Upload hint */}
-      {isBot && showUpload && (
-        <div style={{width:"100%",maxWidth:480}}>
-          <UploadHint onUpload={onUpload} isLic={isLic}/>
+      {isBot&&msg.showUpload&&(
+        <div style={{width:"100%",maxWidth:460}}>
+          <UploadHint onUpload={onUpload} licensed={msg.licensed}/>
         </div>
       )}
-
-      {/* Quick reply chips */}
-      {isBot && chips && chips.length > 0 && (
-        <div style={{display:"flex",flexWrap:"wrap",gap:6,maxWidth:500}}>
-          {chips.map(c=><Chip key={c} label={c} onClick={()=>onChip(c)}/>)}
+      {isBot&&msg.chips?.length>0&&(
+        <div style={{display:"flex",flexWrap:"wrap",gap:7,maxWidth:480,animation:"bubbleIn .35s .1s var(--spring) both"}}>
+          {msg.chips.map(c=><Chip key={c} label={c} onClick={onChip}/>)}
         </div>
       )}
     </div>
   );
 };
 
-// ════════════════════════════════════════════════════════════════
-// MAIN COMPONENT
-// ════════════════════════════════════════════════════════════════
-export default function ServiceChat({ ctx }) {
+export default function ServiceChat({ctx}) {
   const svc = ctx.selectedService;
-  const [msgs, setMsgs] = useState([
-    {
-      role:"assistant",
-      content:`¡Hola! Soy tu asistente para ${svc?.label}. 👋\n\n¿Qué necesitas fabricar? Puedes describirlo con tus propias palabras, sin tecnicismos — yo te ayudo a armar el pedido perfecto.`,
-      chips:["Quiero una figura/figurilla","Necesito una pieza funcional","Es para un prototipo","Tengo un diseño listo"],
-      showMats:false, showUpload:false, isLic:false,
-    }
-  ]);
-  const [input, setInput]           = useState("");
-  const [loading, setLoading]       = useState(false);
-  const [brief, setBrief]           = useState(null);
-  const [images, setImages]         = useState([]);
-  const [audio, setAudio]           = useState(null);
-  const [cadFile, setCadFile]       = useState(null);
-  const [step, setStep]             = useState("chat");
-  const [progress, setProgress]     = useState(1);
-  const [publishing, setPublishing] = useState(false);
+
+  const buildSystem = () => `Eres un asistente de manufactura para "${svc?.label}". Filosofía: UNA pregunta a la vez, cálido, amigable, experto.
+
+Responde SIEMPRE en JSON (sin markdown):
+{"message":"...","showMaterials":bool,"showUpload":bool,"chips":["..."],"brief":null|{...}}
+
+El brief solo cuando tengas: material + dimensiones + cantidad + uso. Estructura del brief:
+{"titulo":"...","descripcion":"...","especificaciones":{"material":"...","dimensiones":"...","acabado":"..."},"cantidad":N,"plazo_estimado":"...","presupuesto_referencial":"...","notas_adicionales":"..."}
+
+- showMaterials: true cuando hables de materiales
+- showUpload: true para piezas complejas, personajes, logos con derechos
+- chips: máximo 4 opciones rápidas relevantes o []
+- Recomienda material según el uso (llavero diario → ABS/PETG; figura decorativa → PLA/Resina; alta precisión → Resina)
+- Interpreta lenguaje coloquial
+- Si mencionan Pokemon, Disney, Marvel, anime → showUpload:true + aviso de copyright
+- Habla en español casual peruano, emojis con moderación`;
+
+  const [msgs,setMsgs] = useState([{
+    role:"assistant",
+    content:`¡Hola! 👋 Cuéntame, ¿qué necesitas fabricar?\n\nDescríbelo con tus palabras — yo te ayudo a preparar el pedido perfecto.`,
+    chips:["Quiero una figura","Necesito una pieza funcional","Tengo un diseño listo","Es para un prototipo"],
+    showMats:false,showUpload:false,licensed:false,
+  }]);
+  const [input,setInput]     = useState("");
+  const [loading,setLoading] = useState(false);
+  const [brief,setBrief]     = useState(null);
+  const [images,setImages]   = useState([]);
+  const [audio,setAudio]     = useState(null);
+  const [cadFile,setCadFile] = useState(null);
+  const [step,setStep]       = useState("chat");
+  const [progress,setProgress] = useState(1);
+  const [publishing,setPublishing] = useState(false);
   const chatRef = useRef(null);
   const imgRef  = useRef(null);
   const audRef  = useRef(null);
   const cadRef  = useRef(null);
 
-  useEffect(()=>{
-    if(chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
-  },[msgs]);
+  useEffect(()=>{if(chatRef.current)chatRef.current.scrollTo({top:chatRef.current.scrollHeight,behavior:"smooth"});},[msgs,loading]);
 
-  const SYSTEM = `Eres un asistente experto y empático en manufactura para el servicio "${svc?.label}". Tu objetivo es obtener todos los datos técnicos para un brief de fabricación de manera conversacional y amigable.
-
-Responde SIEMPRE en JSON con esta estructura exacta (sin markdown):
-{
-  "message": "Tu respuesta amigable aquí",
-  "showMaterials": true/false (true cuando preguntes o hables de materiales),
-  "showUpload": true/false (true cuando la pieza sea compleja o detectes personajes/logos),
-  "chips": ["opción1","opción2","opción3"] (máximo 4 opciones rápidas relevantes, o [] si no aplica),
-  "brief": null o {"titulo":"...","descripcion":"...","especificaciones":{...},"cantidad":N,"plazo_estimado":"...","presupuesto_referencial":"...","notas_adicionales":"..."} (solo cuando tengas SUFICIENTE info: material + dimensiones + cantidad + uso)
-}
-
-Reglas:
-- Sé muy amigable y usa emojis ocasionalmente
-- Haz UNA sola pregunta a la vez
-- Si mencionan personajes famosos (Pokemon, Disney, etc), pon showUpload:true y advierte sobre copyright
-- Si la pieza suena compleja, pon showUpload:true
-- Cuando preguntes por material, pon showMaterials:true
-- NO pongas "brief" hasta tener material + dimensiones + cantidad + uso final
-- Cuando tengas todo, genera el brief completo
-- Habla siempre en español peruano casual`;
-
-  const send = async (text) => {
-    const content = text || input;
-    if (!content.trim() || loading) return;
-    const next = [...msgs, { role:"user", content }];
-    setMsgs(next);
+  const send = useCallback(async(text)=>{
+    const content=(text??input).trim();
+    if(!content||loading)return;
     setInput("");
+    const history=[...msgs,{role:"user",content}];
+    setMsgs(history);
     setLoading(true);
-
     try {
-      const raw = await callAI(SYSTEM, next.map(m=>({role:m.role,content:m.content})));
+      const apiMsgs=[{role:"system",content:buildSystem()},...history.map(m=>({role:m.role==="assistant"?"assistant":"user",content:m.content}))];
+      const raw=await callAI(apiMsgs);
       let parsed;
-      try { parsed = JSON.parse(raw); }
-      catch {
-        const match = raw.match(/\{[\s\S]*\}/);
-        parsed = match ? JSON.parse(match[0]) : { message: raw, showMaterials:false, showUpload:false, chips:[] };
-      }
-
-      const userText = content.toLowerCase();
-      const detectedComplex = isComplex(userText);
-      const detectedLic     = isLicensed(userText);
-      const autoChips       = parsed.chips?.length ? parsed.chips : getQuickReplies(parsed.message, svc?.id);
-
-      const botMsg = {
-        role:"assistant",
-        content: parsed.message || "Sin respuesta.",
-        showMats:   parsed.showMaterials || false,
-        showUpload: parsed.showUpload || detectedComplex || detectedLic,
-        isLic:      detectedLic,
-        chips:      autoChips,
-      };
-
-      setMsgs(p=>[...p, botMsg]);
-
-      if (parsed.brief) {
-        setBrief(parsed.brief);
-        setProgress(4);
-        setTimeout(()=>setStep("review"), 800);
-      } else {
-        if (next.length >= 4) setProgress(2);
-        if (next.length >= 6) setProgress(3);
-      }
-
-    } catch(err) {
-      setMsgs(p=>[...p,{role:"assistant",content:`⚠️ Error: ${err.message}`,chips:[],showMats:false,showUpload:false}]);
+      try{parsed=JSON.parse(raw);}catch{const m=raw.match(/\{[\s\S]*\}/);parsed=m?JSON.parse(m[0]):{message:raw,showMaterials:false,showUpload:false,chips:[]};}
+      const isLic=detectLic(content);
+      const isCmp=detectCmp(content);
+      const chips=parsed.chips?.length?parsed.chips:ctxChips(parsed.message||"",svc?.id);
+      setMsgs(p=>[...p,{role:"assistant",content:parsed.message||"Sin respuesta.",showMats:!!parsed.showMaterials,showUpload:!!(parsed.showUpload||isLic||isCmp),licensed:isLic,chips}]);
+      if(parsed.brief){setBrief(parsed.brief);setProgress(4);setTimeout(()=>setStep("review"),600);}
+      else{if(history.length>=4)setProgress(2);if(history.length>=7)setProgress(3);}
+    }catch(err){
+      setMsgs(p=>[...p,{role:"assistant",content:`⚠️ ${err.message}`,chips:[],showMats:false,showUpload:false}]);
     }
     setLoading(false);
-  };
+  },[input,msgs,loading,svc?.id]);
 
-  const handleImg = e => {
-    Array.from(e.target.files).forEach(file=>{
-      const r = new FileReader();
-      r.onload = ev => setImages(p=>[...p,{name:file.name,data:ev.target.result}]);
-      r.readAsDataURL(file);
-    });
-  };
+  const handleImg=e=>Array.from(e.target.files).forEach(f=>{const r=new FileReader();r.onload=ev=>setImages(p=>[...p,{name:f.name,data:ev.target.result}]);r.readAsDataURL(f);});
 
-  const publish = async () => {
+  const publish=async()=>{
     setPublishing(true);
-    try {
-      await addDoc(collection(db,"orders"),{
-        userId:ctx.user.id, userName:ctx.user.name,
-        service:svc?.id, serviceName:svc?.label,
-        brief, images:images.map(i=>i.name),
-        audio:audio?.name||null, cadFile:cadFile?.name||null,
-        status:"open", createdAt:serverTimestamp(),
-      });
-      ctx.showToast("¡Pedido publicado! Los talleres ya pueden cotizarlo.");
-      ctx.setView("myOrders");
-    } catch(e){ ctx.showToast("Error: "+e.message,"err"); }
+    try{
+      await addDoc(collection(db,"orders"),{userId:ctx.user.id,userName:ctx.user.name,service:svc?.id,serviceName:svc?.label,brief,images:images.map(i=>i.name),audio:audio?.name||null,cadFile:cadFile?.name||null,status:"open",createdAt:serverTimestamp()});
+      ctx.showToast("¡Pedido publicado!");ctx.setView("myOrders");
+    }catch(e){ctx.showToast("Error: "+e.message,"err");}
     setPublishing(false);
   };
 
-  const STEPS = ["Tipo de servicio","Descripción","Especificaciones","Brief completo"];
-
-  const hiddenInputs = (
+  const STEPS=["Servicio","Descripción","Especificaciones","Brief"];
+  const hidden=(
     <>
       <input ref={imgRef} type="file" multiple accept="image/*" style={{display:"none"}} onChange={handleImg}/>
       <input ref={audRef} type="file" accept="audio/*" style={{display:"none"}} onChange={e=>{if(e.target.files[0])setAudio({name:e.target.files[0].name});}}/>
@@ -330,170 +217,119 @@ Reglas:
     </>
   );
 
-  // ── REVIEW ──────────────────────────────────────────────────────
-  if (step === "review" && brief) return (
-    <div>
-      <Nav ctx={ctx} title={svc?.label} showBack/>
-      {hiddenInputs}
-      <div className="page" style={{maxWidth:700}}>
-        <div style={{marginBottom:24}}>
-          <div className="section-title">¡Listo! Revisa tu pedido</div>
-          <div className="section-sub">El asistente preparó tu solicitud técnica.</div>
+  // REVIEW
+  if(step==="review"&&brief) return(
+    <div style={{minHeight:"100vh",background:"var(--ink)"}}>
+      <Nav ctx={ctx} title={svc?.label} showBack/>{hidden}
+      <div className="page" style={{maxWidth:660}}>
+        <div style={{textAlign:"center",paddingTop:8,marginBottom:32}}>
+          <div style={{fontSize:44,marginBottom:12}}>✅</div>
+          <h1 className="section-title">Tu pedido está listo</h1>
+          <p className="section-sub">Revísalo y publícalo para recibir cotizaciones</p>
         </div>
-        <div className="card" style={{padding:26,marginBottom:18,borderLeft:`3px solid ${svc?.accent}`}}>
-          <div style={{fontWeight:800,fontSize:17,color:svc?.accent,marginBottom:10}}>{brief.titulo}</div>
-          <div style={{fontSize:14,color:"#A1A1AA",lineHeight:1.65,marginBottom:14}}>{brief.descripcion}</div>
-          {brief.especificaciones && Object.keys(brief.especificaciones).length>0 && (
-            <div style={{display:"flex",flexWrap:"wrap",gap:7,marginBottom:14}}>
+        <div style={{background:"var(--ink-2)",borderRadius:20,padding:26,border:`1px solid ${svc?.accent}25`,boxShadow:`0 0 0 1px ${svc?.accent}10,0 20px 60px rgba(0,0,0,.3)`,marginBottom:18}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
+            <div style={{width:36,height:36,borderRadius:10,background:`${svc?.accent}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,color:svc?.accent}}>{svc?.icon}</div>
+            <div>
+              <div style={{fontFamily:"var(--font-display)",fontSize:17,color:svc?.accent}}>{brief.titulo}</div>
+              <div style={{fontSize:12,color:"var(--mist)"}}>{svc?.label}</div>
+            </div>
+          </div>
+          <p style={{fontSize:14,color:"var(--fog)",lineHeight:1.65,marginBottom:16}}>{brief.descripcion}</p>
+          {brief.especificaciones&&Object.keys(brief.especificaciones).length>0&&(
+            <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:16}}>
               {Object.entries(brief.especificaciones).map(([k,v])=><span key={k} className="tag">{k}: {String(v)}</span>)}
             </div>
           )}
-          <div style={{display:"flex",flexWrap:"wrap",gap:16,fontSize:13,color:"#71717A"}}>
-            <span>📦 {brief.cantidad} und.</span>
-            <span>📅 {brief.plazo_estimado}</span>
-            <span>💰 {brief.presupuesto_referencial}</span>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+            {[["📦","Cantidad",String(brief.cantidad)+" und."],["📅","Plazo",brief.plazo_estimado],["💰","Referencia",brief.presupuesto_referencial]].map(([icon,label,val])=>(
+              <div key={label} style={{background:"var(--ink-3)",borderRadius:12,padding:"10px 13px"}}>
+                <div style={{fontSize:15,marginBottom:3}}>{icon}</div>
+                <div style={{fontSize:10,color:"var(--mist)",marginBottom:1}}>{label}</div>
+                <div style={{fontSize:12,fontWeight:600}}>{val}</div>
+              </div>
+            ))}
           </div>
         </div>
-        <div className="card" style={{padding:22,marginBottom:18}}>
-          <div style={{fontWeight:700,fontSize:14,marginBottom:14}}>📎 Adjuntos</div>
-          <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-            <button className="btn-ghost btn-sm" onClick={()=>imgRef.current.click()}>🖼️ Imágenes {images.length>0?`(${images.length})`:""}</button>
+        <div style={{background:"var(--ink-2)",borderRadius:16,padding:18,marginBottom:18,border:"1px solid var(--ink-3)"}}>
+          <div style={{fontWeight:700,marginBottom:12,fontSize:13}}>📎 Adjuntos <span style={{color:"var(--mist)",fontWeight:400}}>(opcionales)</span></div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            <button className="btn-ghost btn-sm" onClick={()=>imgRef.current.click()}>🖼️ {images.length>0?`${images.length} imagen(es)`:"Imágenes"}</button>
             <button className="btn-ghost btn-sm" onClick={()=>audRef.current.click()}>🎙️ {audio?audio.name:"Audio"}</button>
             <button className="btn-ghost btn-sm" onClick={()=>cadRef.current.click()}>📐 {cadFile?cadFile.name:"Archivo CAD"}</button>
           </div>
-          {images.length>0&&(
-            <div style={{display:"flex",gap:8,marginTop:12,flexWrap:"wrap"}}>
-              {images.map((img,i)=>(
-                <div key={i} style={{position:"relative"}}>
-                  <img src={img.data} alt="" style={{width:70,height:70,objectFit:"cover",borderRadius:8,border:"1px solid #27272A"}}/>
-                  <button onClick={()=>setImages(p=>p.filter((_,j)=>j!==i))} style={{position:"absolute",top:-5,right:-5,background:"#EF4444",border:"none",borderRadius:"50%",width:17,height:17,cursor:"pointer",color:"#fff",fontSize:9}}>✕</button>
-                </div>
-              ))}
-            </div>
-          )}
-          {cadFile&&<div style={{marginTop:10,display:"flex",alignItems:"center",gap:8,background:"#0F0F11",borderRadius:8,padding:"8px 12px"}}><span>📐</span><span style={{fontSize:12,color:"#A1A1AA"}}>{cadFile.name}</span><button onClick={()=>setCadFile(null)} style={{marginLeft:"auto",background:"none",border:"none",color:"#71717A",cursor:"pointer"}}>✕</button></div>}
+          {images.length>0&&<div style={{display:"flex",gap:8,marginTop:10,flexWrap:"wrap"}}>{images.map((img,i)=>(<div key={i} style={{position:"relative"}}><img src={img.data} alt="" style={{width:60,height:60,objectFit:"cover",borderRadius:9,border:"1px solid var(--ink-3)"}}/><button onClick={()=>setImages(p=>p.filter((_,j)=>j!==i))} style={{position:"absolute",top:-5,right:-5,background:"#FF453A",border:"none",borderRadius:"50%",width:17,height:17,cursor:"pointer",color:"#fff",fontSize:9}}>✕</button></div>))}</div>}
+          {cadFile&&<div style={{marginTop:8,display:"flex",alignItems:"center",gap:8,background:"var(--ink-3)",borderRadius:9,padding:"7px 12px"}}><span>📐</span><span style={{fontSize:12,color:"var(--fog)"}}>{cadFile.name}</span><button onClick={()=>setCadFile(null)} style={{marginLeft:"auto",background:"none",border:"none",color:"var(--mist)",cursor:"pointer"}}>✕</button></div>}
         </div>
         <div style={{display:"flex",gap:10}}>
-          <button className="btn-primary" style={{flex:1,padding:"12px 20px",fontSize:14}} onClick={publish} disabled={publishing}>
-            {publishing?<span className="spinner"/>:"🚀 Publicar pedido"}
-          </button>
-          <button className="btn-ghost" onClick={()=>setStep("chat")}>← Editar</button>
+          <button className="btn-primary" style={{flex:1,padding:"14px",fontSize:15}} onClick={publish} disabled={publishing}>{publishing?<span className="spinner"/>:"🚀 Publicar pedido"}</button>
+          <button className="btn-ghost" style={{padding:"14px 20px"}} onClick={()=>setStep("chat")}>← Editar</button>
         </div>
       </div>
     </div>
   );
 
-  // ── CHAT ────────────────────────────────────────────────────────
-  return (
-    <div style={{display:"flex",flexDirection:"column",height:"100vh",background:"#09090B"}}>
-      <Nav ctx={ctx} title={svc?.label} showBack/>
-      {hiddenInputs}
-      <div style={{flex:1,overflow:"hidden",display:"flex",maxWidth:1020,margin:"0 auto",width:"100%",padding:"16px 24px",gap:18}}>
-
-        {/* ── Panel chat ── */}
-        <div style={{flex:1,display:"flex",flexDirection:"column",background:"#111113",borderRadius:16,border:"1px solid #27272A",overflow:"hidden"}}>
-          {/* Header */}
-          <div style={{padding:"14px 18px",borderBottom:"1px solid #27272A",display:"flex",alignItems:"center",gap:10}}>
-            <div style={{width:36,height:36,borderRadius:10,background:`${svc?.accent}22`,border:`1px solid ${svc?.accent}44`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,color:svc?.accent}}>
-              {svc?.icon}
+  // CHAT
+  return(
+    <div style={{display:"flex",flexDirection:"column",height:"100vh",background:"var(--ink)"}}>
+      <Nav ctx={ctx} title={svc?.label} showBack/>{hidden}
+      <div style={{flex:1,overflow:"hidden",display:"flex",maxWidth:980,margin:"0 auto",width:"100%",padding:"14px 20px",gap:14}}>
+        <div style={{flex:1,display:"flex",flexDirection:"column",background:"var(--ink-2)",borderRadius:20,border:"1px solid var(--ink-3)",overflow:"hidden",boxShadow:"var(--shadow)"}}>
+          <div style={{padding:"13px 17px",borderBottom:"1px solid var(--ink-3)",display:"flex",alignItems:"center",gap:11,background:"rgba(255,255,255,.015)"}}>
+            <div style={{width:36,height:36,borderRadius:11,background:`${svc?.accent}18`,border:`1px solid ${svc?.accent}28`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{svc?.icon}</div>
+            <div style={{flex:1}}>
+              <div style={{fontWeight:700,fontSize:14,color:svc?.accent}}>{svc?.label}</div>
+              <div style={{fontSize:11,color:"var(--mist)",display:"flex",alignItems:"center",gap:4}}>
+                <span style={{width:5,height:5,borderRadius:"50%",background:"var(--green)",display:"inline-block"}}/>Asistente IA · GPT-4o
+              </div>
             </div>
-            <div>
-              <div style={{fontWeight:800,fontSize:14,color:svc?.accent}}>{svc?.label}</div>
-              <div style={{fontSize:11,color:"#52525B"}}>Asistente IA · GPT-4o</div>
-            </div>
-            <div style={{marginLeft:"auto",display:"flex",gap:6}}>
-              <button className="btn-ghost btn-sm" onClick={()=>imgRef.current?.click()} title="Imágenes">🖼️{images.length>0?` ${images.length}`:""}</button>
-              <button className="btn-ghost btn-sm" onClick={()=>cadRef.current?.click()} title="CAD">{cadFile?"📐✓":"📐"}</button>
-            </div>
+            <button className="btn-ghost btn-sm" onClick={()=>imgRef.current?.click()}>🖼️{images.length>0?` ${images.length}`:""}</button>
+            <button className="btn-ghost btn-sm" onClick={()=>cadRef.current?.click()}>{cadFile?"📐✓":"📐"}</button>
           </div>
-
-          {/* Mensajes */}
-          <div ref={chatRef} style={{flex:1,overflowY:"auto",padding:"18px 18px",display:"flex",flexDirection:"column",gap:16,scrollbarWidth:"thin"}}>
-            {msgs.map((m,i)=>(
-              <Bubble key={i} msg={m} svc={svc}
-                chips={m.chips||[]}
-                showMats={m.showMats}
-                showUpload={m.showUpload}
-                isLic={m.isLic}
-                onChip={text=>{setInput("");send(text);}}
-                onMaterial={mat=>{setInput("");send(`Quiero usar ${mat}`);}}
-                onUpload={()=>cadRef.current?.click()}
+          <div ref={chatRef} style={{flex:1,overflowY:"auto",padding:"18px",display:"flex",flexDirection:"column",gap:14}}>
+            {msgs.map((m,i)=>(<Bubble key={i} msg={m} svc={svc} onChip={t=>send(t)} onMatSelect={mat=>send(`Quiero usar ${mat}`)} onUpload={()=>cadRef.current?.click()}/>))}
+            {loading&&<TypingDots accent={svc?.accent}/>}
+          </div>
+          <div style={{padding:"12px 14px",borderTop:"1px solid var(--ink-3)",background:"rgba(0,0,0,.15)"}}>
+            <div style={{display:"flex",gap:8,alignItems:"flex-end"}}>
+              <textarea className="input" placeholder="Escribe aquí..." value={input}
+                onChange={e=>{setInput(e.target.value);e.target.style.height="auto";e.target.style.height=Math.min(e.target.scrollHeight,120)+"px";}}
+                onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();}}}
+                disabled={loading} rows={1}
+                style={{flex:1,resize:"none",background:"var(--ink-3)",border:"1px solid var(--ink-4)",borderRadius:12,padding:"10px 13px",fontSize:14,lineHeight:1.4,maxHeight:120,overflow:"hidden",transition:"height .15s"}}
               />
-            ))}
-            {loading&&(
-              <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                <div style={{background:"#27272A",borderRadius:"18px 18px 18px 4px",padding:"12px 16px",display:"flex",gap:4}}>
-                  {[0,1,2].map(i=><span key={i} style={{width:6,height:6,borderRadius:"50%",background:svc?.accent,display:"inline-block",animation:"bounce 1s infinite",animationDelay:`${i*0.2}s`}}/>)}
-                </div>
-                <style>{`@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}`}</style>
+              <button className="btn-primary" style={{padding:"10px 18px",borderRadius:12,flexShrink:0}} onClick={()=>send()} disabled={loading||!input.trim()}>→</button>
+            </div>
+            {msgs.filter(m=>m.role==="user").length>=4&&!brief&&(
+              <div style={{marginTop:7,textAlign:"center"}}>
+                <button onClick={()=>{const desc=msgs.filter(m=>m.role==="user").map(m=>m.content).join(". ");setBrief({titulo:`Pedido de ${svc?.label}`,descripcion:desc,especificaciones:{},cantidad:1,plazo_estimado:"A definir",presupuesto_referencial:"A consultar",notas_adicionales:""});setProgress(4);setStep("review");}} style={{background:"none",border:"none",color:"var(--mist)",fontSize:12,cursor:"pointer",fontFamily:"inherit",textDecoration:"underline"}}>
+                  Generar brief con la info actual →
+                </button>
               </div>
             )}
           </div>
-
-          {/* Input */}
-          <div style={{padding:"12px 14px",borderTop:"1px solid #27272A",display:"flex",gap:8}}>
-            <input
-              className="input"
-              placeholder="Escribe tu respuesta..."
-              value={input}
-              onChange={e=>setInput(e.target.value)}
-              onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&send()}
-              disabled={loading}
-              style={{flex:1,background:"#0F0F11"}}
-            />
-            <button className="btn-primary" style={{padding:"10px 18px",borderRadius:10}} onClick={()=>send()} disabled={loading||!input.trim()}>→</button>
-          </div>
-
-          {msgs.filter(m=>m.role==="user").length>=4&&!brief&&(
-            <div style={{padding:"8px 14px",background:"#0a0a0c",textAlign:"center",borderTop:"1px solid #18181B"}}>
-              <button className="btn-ghost btn-sm" onClick={()=>{
-                const desc = msgs.filter(m=>m.role==="user").map(m=>m.content).join(". ");
-                setBrief({titulo:`Pedido de ${svc?.label}`,descripcion:desc,especificaciones:{},cantidad:1,plazo_estimado:"A definir",presupuesto_referencial:"A consultar",notas_adicionales:""});
-                setProgress(4); setStep("review");
-              }} style={{fontSize:12}}>
-                Generar brief con la info actual →
-              </button>
-            </div>
-          )}
         </div>
-
-        {/* ── Sidebar ── */}
-        <div style={{width:200,display:"flex",flexDirection:"column",gap:14}}>
-          <div className="card" style={{padding:18}}>
-            <div style={{fontSize:11,fontWeight:700,color:"#52525B",textTransform:"uppercase",letterSpacing:".08em",marginBottom:14}}>Progreso</div>
-            {STEPS.map((label,i)=>{
-              const st = i<progress?"done":i===progress-1?"active":"todo";
-              return(
-                <div key={i} style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
-                  <div style={{
-                    width:24,height:24,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",
-                    fontSize:11,fontWeight:800,flexShrink:0,
-                    background: st==="done"?svc?.accent:st==="active"?"#27272A":"#18181B",
-                    border: st==="active"?`2px solid ${svc?.accent}`:st==="done"?"none":"1px solid #27272A",
-                    color: st==="done"?"#fff":st==="active"?svc?.accent:"#52525B",
-                  }}>
-                    {st==="done"?"✓":i+1}
-                  </div>
-                  <span style={{fontSize:12,color:st==="todo"?"#3F3F46":st==="done"?"#FAFAFA":svc?.accent,lineHeight:1.3}}>{label}</span>
+        <div style={{width:186,display:"flex",flexDirection:"column",gap:12}}>
+          <div style={{background:"var(--ink-2)",borderRadius:16,padding:15,border:"1px solid var(--ink-3)"}}>
+            <div className="t-label" style={{marginBottom:13}}>Progreso</div>
+            {STEPS.map((label,i)=>{const st=i<progress?"done":i===progress-1?"active":"todo";return(
+              <div key={i} style={{display:"flex",alignItems:"center",gap:9,marginBottom:11}}>
+                <div style={{width:22,height:22,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,flexShrink:0,background:st==="done"?svc?.accent:st==="active"?"transparent":"var(--ink-3)",border:st==="active"?`2px solid ${svc?.accent}`:st==="done"?"none":"1px solid var(--ink-4)",color:st==="done"?"#fff":st==="active"?svc?.accent:"var(--ink-4)",transition:"all .3s var(--spring)"}}>
+                  {st==="done"?"✓":i+1}
                 </div>
-              );
-            })}
+                <span style={{fontSize:12,color:st==="todo"?"var(--ink-4)":st==="done"?"var(--fog)":svc?.accent,transition:"color .3s"}}>{label}</span>
+              </div>
+            );})}
           </div>
-
-          <div className="card" style={{padding:14}}>
-            <div style={{fontSize:11,fontWeight:700,color:"#52525B",marginBottom:10,textTransform:"uppercase",letterSpacing:".06em"}}>Adjuntos</div>
-            {[
-              {label:`🖼️ Imágenes${images.length>0?` (${images.length})`:""}`,action:()=>imgRef.current?.click()},
-              {label:`🎙️ ${audio?"✓ Audio":"Audio"}`,action:()=>audRef.current?.click()},
-              {label:`📐 ${cadFile?"✓ CAD":"Archivo CAD"}`,action:()=>cadRef.current?.click()},
-            ].map(({label,action})=>(
-              <button key={label} className="btn-ghost" style={{width:"100%",fontSize:11,marginBottom:6,padding:"7px 10px",textAlign:"left"}} onClick={action}>{label}</button>
+          <div style={{background:"var(--ink-2)",borderRadius:16,padding:13,border:"1px solid var(--ink-3)"}}>
+            <div className="t-label" style={{marginBottom:10}}>Adjuntos</div>
+            {[{icon:"🖼️",label:`Imágenes${images.length>0?` (${images.length})`:""}}`,action:()=>imgRef.current?.click()},{icon:"🎙️",label:audio?"✓ Audio":"Audio",action:()=>audRef.current?.click()},{icon:"📐",label:cadFile?"✓ CAD":"Archivo CAD",action:()=>cadRef.current?.click()}].map(({icon,label,action})=>(
+              <button key={label} onClick={action} className="btn-ghost btn-sm" style={{width:"100%",textAlign:"left",marginBottom:6,fontSize:11,display:"flex",alignItems:"center",gap:6}}><span>{icon}</span><span>{label}</span></button>
             ))}
           </div>
-
-          <div style={{background:"#0c1a3a",border:"1px solid #1e3a6e",borderRadius:12,padding:12}}>
-            <div style={{fontSize:11,fontWeight:700,color:"#93c5fd",marginBottom:6}}>💡 Tip</div>
-            <div style={{fontSize:11,color:"#71717A",lineHeight:1.5}}>Si tienes un archivo STL, STEP o diseño en Canva, súbelo para una cotización más precisa.</div>
+          <div style={{background:"rgba(10,132,255,.06)",border:"1px solid rgba(10,132,255,.15)",borderRadius:14,padding:12}}>
+            <div style={{fontSize:11,fontWeight:700,color:"#0A84FF",marginBottom:4}}>💡 Tip</div>
+            <div style={{fontSize:11,color:"var(--mist)",lineHeight:1.55}}>Si tienes un STL, STEP o imagen de referencia, súbelo para cotizaciones más precisas.</div>
           </div>
         </div>
       </div>
