@@ -15,46 +15,28 @@ async function callAI(messages) {
 }
 
 const MATS = {
-  "3d":[
-    {id:"pla",  name:"PLA",    emoji:"🌿",color:"#30D158",sub:"Económico · Decorativo",   best:"Figuras, prototipos, regalos"},
-    {id:"abs",  name:"ABS",    emoji:"⚙️",color:"#FF6B35",sub:"Resistente · Funcional",   best:"Carcasas, piezas mecánicas"},
-    {id:"petg", name:"PETG",   emoji:"💧",color:"#0A84FF",sub:"Flexible · Resistente agua",best:"Contenedores, piezas mixtas"},
-    {id:"tpu",  name:"TPU",    emoji:"🤸",color:"#BF5AF2",sub:"Tipo goma · Flexible",     best:"Fundas, juntas, agarre"},
-    {id:"resin",name:"Resina", emoji:"✨",color:"#FFD60A",sub:"Ultra detalle · Fino",     best:"Miniaturas, joyería, figuras"},
-  ],
-  "cnc":[
-    {id:"alum", name:"Aluminio", emoji:"🔩",color:"#98989D",sub:"Ligero · Resistente",   best:"Piezas mecánicas, soportes"},
-    {id:"acero",name:"Acero",    emoji:"⚙️",color:"#636366",sub:"Máxima resistencia",    best:"Ejes, engranajes, estructuras"},
-    {id:"mad",  name:"Madera",   emoji:"🌳",color:"#A1845C",sub:"Cálido · Económico",    best:"Muebles, señalética, arte"},
-    {id:"acri", name:"Acrílico", emoji:"💎",color:"#FF375F",sub:"Visual · Transparente", best:"Displays, letreros, arte"},
-  ],
-  "laser":[
-    {id:"mdf",  name:"MDF",      emoji:"🪵",color:"#A1845C",sub:"Popular · Económico",  best:"Packaging, maquetas, deco"},
-    {id:"acri2",name:"Acrílico", emoji:"💜",color:"#BF5AF2",sub:"Estético · Preciso",   best:"Señalética, displays, joyas"},
-    {id:"cuero",name:"Cuero",    emoji:"👜",color:"#8E4D20",sub:"Premium · Cálido",     best:"Billeteras, fundas, regalos"},
-    {id:"tela", name:"Tela",     emoji:"🧵",color:"#5E5CE6",sub:"Corte limpio",         best:"Ropa, bordados, accesorios"},
-  ],
-  "plastic":[
-    {id:"pp",   name:"Polipropileno",emoji:"🥤",color:"#30D158",sub:"Industrial · Ligero",  best:"Envases, tapas, industria"},
-    {id:"abs2", name:"ABS",          emoji:"📦",color:"#FF6B35",sub:"Rígido · Resistente",  best:"Electrodomésticos, carcasas"},
-    {id:"nylon",name:"Nylon",        emoji:"🔧",color:"#BF5AF2",sub:"Alta ingeniería",      best:"Engranajes, piezas técnicas"},
-    {id:"pe",   name:"Polietileno",  emoji:"🧴",color:"#0A84FF",sub:"Flexible · Económico", best:"Envases, juguetes, bolsas"},
+  metalmecanica: [
+    { id: "acero", name: "Acero al carbono", emoji: "🔩", color: "#636366", sub: "Versátil · Soldable", best: "Estructuras, ejes, refacciones comunes" },
+    { id: "inox", name: "Acero inoxidable", emoji: "✨", color: "#94A3B8", sub: "Corrosión · Higiene", best: "Valvulería, alimentos, exterior" },
+    { id: "alum", name: "Aluminio", emoji: "⚡", color: "#98989D", sub: "Ligero · Mecanizable", best: "Soportes, carcasas, piezas livianas" },
+    { id: "bronce", name: "Bronce / latón", emoji: "🟤", color: "#B45309", sub: "Desgaste · Buje", best: "Bujes, casquillos, piezas de fricción" },
+    { id: "fund", name: "Fundición / hierro", emoji: "🏗", color: "#57534E", sub: "Piezas gruesas", best: "Bases, contrapesos, piezas pesadas" },
   ],
 };
 
 const LIC_KW = ["pokemon","disney","marvel","dc ","naruto","anime","figura","figurilla","personaje","cartoon","funko","lego","one piece","dragon ball","spiderman","batman","sonic","mario","pikachu","minion"];
-const CMP_KW = ["3d scan","escultura","logo","marca","relieve","grabado detall","geometría compleja","modelo 3d","diseño cad","stl","step","iges"];
+const CMP_KW = ["tolerancia","rosca","engranaje","chavetero","keyway","rectificado","fresa","torno","soldadura","dxf","dwg","plano","step","iges","eje","buje","casquillo"];
 const detectLic = t => LIC_KW.some(k=>t.toLowerCase().includes(k));
 const detectCmp = t => CMP_KW.some(k=>t.toLowerCase().includes(k));
 
-const ctxChips = (botText, svcId) => {
+const ctxChips = (botText) => {
   const t = botText.toLowerCase();
-  if (t.includes("material")) return svcId==="3d"?["PLA","ABS","PETG","Resina"]:svcId==="cnc"?["Aluminio","Acero","Madera","Acrílico"]:svcId==="laser"?["MDF","Acrílico","Cuero"]:["PP","ABS","Nylon"];
-  if (t.includes("cantidad")||t.includes("cuántas")||t.includes("unidades")) return ["1 unidad","2-10","10-50","Más de 50"];
-  if (t.includes("dimensi")||t.includes("medida")||t.includes("tamaño")) return ["<5cm","5-15cm","15-30cm",">30cm"];
-  if (t.includes("plazo")||t.includes("urgente")||t.includes("cuándo")) return ["Urgente (1-3 días)","1 semana","Sin apuro"];
-  if (t.includes("uso")||t.includes("para qué")||t.includes("destino")) return ["Uso personal","Regalo","Prototipo","Producción"];
-  if (t.includes("acabado")||t.includes("pintura")||t.includes("color")) return ["Sin acabado","Un color","Multicolor","Acabado premium"];
+  if (t.includes("material") || t.includes("aleación") || t.includes("aleacion")) return ["Acero al carbono", "Acero inoxidable", "Aluminio", "Bronce / latón"];
+  if (t.includes("cantidad")||t.includes("cuántas")||t.includes("unidades")) return ["1 pieza","2-5","6-20","Serie mayor"];
+  if (t.includes("dimensi")||t.includes("medida")||t.includes("tamaño")||t.includes("diámetro")||t.includes("diametro")) return ["<10 cm","10-30 cm","30-60 cm",">60 cm"];
+  if (t.includes("plazo")||t.includes("urgente")||t.includes("cuándo")) return ["Urgente (1-3 días)","1 semana","2-3 semanas","Sin apuro"];
+  if (t.includes("trabajo")||t.includes("repar")||t.includes("fabric")) return ["Solo reparación","Solo fabricación nueva","Réplica por muestra","Por plano"];
+  if (t.includes("acabado")||t.includes("tratamiento")||t.includes("pintura")||t.includes("galvan")) return ["Sin tratamiento","Pintura","Zincado / galvanizado","Pulido"];
   return [];
 };
 
@@ -95,8 +77,8 @@ const UploadHint = ({onUpload,licensed}) => (
     </div>
     <div style={{fontSize:12,color:"var(--mist)",lineHeight:1.6,marginBottom:12}}>
       {licensed
-        ?"Para reproducir personajes con copyright (Pokémon, Disney, etc.) necesitas el archivo 3D original. Sube tu diseño CAD para cotizar con precisión."
-        :"Para piezas con geometría compleja, subir un archivo CAD (STL, STEP, OBJ) garantiza cotizaciones exactas."
+        ?"Si el diseño no es tuyo, necesitas autorización o planos con derechos resueltos. Sube plano o documento técnico para cotizar bien."
+        :"Plano (PDF/DXF), STEP o fotos claras con medidas ayudan a cotizar reparaciones y piezas nuevas con precisión."
       }
     </div>
     <button onClick={onUpload} style={{background:"rgba(10,132,255,.15)",border:"1px solid rgba(10,132,255,.3)",borderRadius:9,padding:"8px 16px",fontSize:12,fontWeight:600,color:"#0A84FF",cursor:"pointer",fontFamily:"inherit"}}>
@@ -135,26 +117,25 @@ const Bubble = ({msg,svc,onChip,onMatSelect,onUpload}) => {
 export default function ServiceChat({ctx}) {
   const svc = ctx.selectedService;
 
-  const buildSystem = () => `Eres un asistente de manufactura para "${svc?.label}". Filosofía: UNA pregunta a la vez, cálido, amigable, experto.
+  const buildSystem = () => `Eres un asistente de taller metalmecánico para "${svc?.label}" (reparación y fabricación de piezas). Filosofía: UNA pregunta a la vez, cálido, claro, experto.
 
 Responde SIEMPRE en JSON (sin markdown):
 {"message":"...","showMaterials":bool,"showUpload":bool,"chips":["..."],"brief":null|{...}}
 
-El brief solo cuando tengas: material + dimensiones + cantidad + uso. Estructura del brief:
-{"titulo":"...","descripcion":"...","especificaciones":{"material":"...","dimensiones":"...","acabado":"..."},"cantidad":N,"plazo_estimado":"...","presupuesto_referencial":"...","notas_adicionales":"..."}
+El brief solo cuando tengas: material o tipo de metal + tipo de trabajo (reparar vs fabricar) + dimensiones o medidas aproximadas + cantidad. Estructura del brief:
+{"titulo":"...","descripcion":"...","especificaciones":{"material":"...","dimensiones":"...","proceso":"reparación|fabricación","acabado":"..."},"cantidad":N,"plazo_estimado":"...","presupuesto_referencial":"...","notas_adicionales":"..."}
 
-- showMaterials: true cuando hables de materiales
-- showUpload: true para piezas complejas, personajes, logos con derechos
+- showMaterials: true cuando convenga elegir material (acero, inox, aluminio, etc.)
+- showUpload: true si faltan planos/medidas y conviene subir PDF, DXF, STEP o fotos
 - chips: máximo 4 opciones rápidas relevantes o []
-- Recomienda material según el uso (llavero diario → ABS/PETG; figura decorativa → PLA/Resina; alta precisión → Resina)
-- Interpreta lenguaje coloquial
-- Si mencionan Pokemon, Disney, Marvel, anime → showUpload:true + aviso de copyright
+- Recomienda material según uso (exterior/humedad → inox; liviano → aluminio; buje/desgaste → bronce; estructura general → acero al carbono)
+- Enfócate solo en metalmecánica: reparación y fabricación de piezas metálicas
 - Habla en español casual peruano, emojis con moderación`;
 
   const [msgs,setMsgs] = useState([{
     role:"assistant",
-    content:`¡Hola! 👋 Cuéntame, ¿qué necesitas fabricar?\n\nDescríbelo con tus palabras — yo te ayudo a preparar el pedido perfecto.`,
-    chips:["Quiero una figura","Necesito una pieza funcional","Tengo un diseño listo","Es para un prototipo"],
+    content:`¡Hola! 👋 ¿Necesitas reparar una pieza o fabricar una nueva?\n\nCuéntame qué equipo o máquina es, qué falló o qué dibujo tienes — armamos el pedido para los talleres.`,
+    chips:["Reparar una pieza rota","Fabricar por plano","Réplica / refacción","Varias piezas iguales"],
     showMats:false,showUpload:false,licensed:false,
   }]);
   const [input,setInput]     = useState("");
@@ -187,7 +168,7 @@ El brief solo cuando tengas: material + dimensiones + cantidad + uso. Estructura
       try{parsed=JSON.parse(raw);}catch{const m=raw.match(/\{[\s\S]*\}/);parsed=m?JSON.parse(m[0]):{message:raw,showMaterials:false,showUpload:false,chips:[]};}
       const isLic=detectLic(content);
       const isCmp=detectCmp(content);
-      const chips=parsed.chips?.length?parsed.chips:ctxChips(parsed.message||"",svc?.id);
+      const chips=parsed.chips?.length?parsed.chips:ctxChips(parsed.message||"");
       setMsgs(p=>[...p,{role:"assistant",content:parsed.message||"Sin respuesta.",showMats:!!parsed.showMaterials,showUpload:!!(parsed.showUpload||isLic||isCmp),licensed:isLic,chips}]);
       if(parsed.brief){setBrief(parsed.brief);setProgress(4);setTimeout(()=>setStep("review"),600);}
       else{if(history.length>=4)setProgress(2);if(history.length>=7)setProgress(3);}
@@ -195,7 +176,7 @@ El brief solo cuando tengas: material + dimensiones + cantidad + uso. Estructura
       setMsgs(p=>[...p,{role:"assistant",content:`⚠️ ${err.message}`,chips:[],showMats:false,showUpload:false}]);
     }
     setLoading(false);
-  },[input,msgs,loading,svc?.id]);
+  },[input, msgs, loading, svc]);
 
   const handleImg=e=>Array.from(e.target.files).forEach(f=>{const r=new FileReader();r.onload=ev=>setImages(p=>[...p,{name:f.name,data:ev.target.result}]);r.readAsDataURL(f);});
 
@@ -256,7 +237,7 @@ El brief solo cuando tengas: material + dimensiones + cantidad + uso. Estructura
           <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
             <button className="btn-ghost btn-sm" onClick={()=>imgRef.current.click()}>🖼️ {images.length>0?`${images.length} imagen(es)`:"Imágenes"}</button>
             <button className="btn-ghost btn-sm" onClick={()=>audRef.current.click()}>🎙️ {audio?audio.name:"Audio"}</button>
-            <button className="btn-ghost btn-sm" onClick={()=>cadRef.current.click()}>📐 {cadFile?cadFile.name:"Archivo CAD"}</button>
+            <button className="btn-ghost btn-sm" onClick={()=>cadRef.current.click()}>📐 {cadFile?cadFile.name:"Plano / CAD"}</button>
           </div>
           {images.length>0&&<div style={{display:"flex",gap:8,marginTop:10,flexWrap:"wrap"}}>{images.map((img,i)=>(<div key={i} style={{position:"relative"}}><img src={img.data} alt="" style={{width:60,height:60,objectFit:"cover",borderRadius:9,border:"1px solid var(--ink-3)"}}/><button onClick={()=>setImages(p=>p.filter((_,j)=>j!==i))} style={{position:"absolute",top:-5,right:-5,background:"#FF453A",border:"none",borderRadius:"50%",width:17,height:17,cursor:"pointer",color:"#fff",fontSize:9}}>✕</button></div>))}</div>}
           {cadFile&&<div style={{marginTop:8,display:"flex",alignItems:"center",gap:8,background:"var(--ink-3)",borderRadius:9,padding:"7px 12px"}}><span>📐</span><span style={{fontSize:12,color:"var(--fog)"}}>{cadFile.name}</span><button onClick={()=>setCadFile(null)} style={{marginLeft:"auto",background:"none",border:"none",color:"var(--mist)",cursor:"pointer"}}>✕</button></div>}
@@ -323,13 +304,13 @@ El brief solo cuando tengas: material + dimensiones + cantidad + uso. Estructura
           </div>
           <div style={{background:"var(--ink-2)",borderRadius:16,padding:13,border:"1px solid var(--ink-3)"}}>
             <div className="t-label" style={{marginBottom:10}}>Adjuntos</div>
-            {[{icon:"🖼️",label:`Imágenes${images.length>0?` (${images.length})`:""}}`,action:()=>imgRef.current?.click()},{icon:"🎙️",label:audio?"✓ Audio":"Audio",action:()=>audRef.current?.click()},{icon:"📐",label:cadFile?"✓ CAD":"Archivo CAD",action:()=>cadRef.current?.click()}].map(({icon,label,action})=>(
+            {[{icon:"🖼️",label:`Imágenes${images.length>0?` (${images.length})`:""}}`,action:()=>imgRef.current?.click()},{icon:"🎙️",label:audio?"✓ Audio":"Audio",action:()=>audRef.current?.click()},{icon:"📐",label:cadFile?"✓ Plano":"Plano / CAD",action:()=>cadRef.current?.click()}].map(({icon,label,action})=>(
               <button key={label} onClick={action} className="btn-ghost btn-sm" style={{width:"100%",textAlign:"left",marginBottom:6,fontSize:11,display:"flex",alignItems:"center",gap:6}}><span>{icon}</span><span>{label}</span></button>
             ))}
           </div>
           <div style={{background:"rgba(10,132,255,.06)",border:"1px solid rgba(10,132,255,.15)",borderRadius:14,padding:12}}>
             <div style={{fontSize:11,fontWeight:700,color:"#0A84FF",marginBottom:4}}>💡 Tip</div>
-            <div style={{fontSize:11,color:"var(--mist)",lineHeight:1.55}}>Si tienes un STL, STEP o imagen de referencia, súbelo para cotizaciones más precisas.</div>
+            <div style={{fontSize:11,color:"var(--mist)",lineHeight:1.55}}>PDF, DXF, STEP o fotos con medidas mejoran mucho la cotización en reparación y fabricación.</div>
           </div>
         </div>
       </div>

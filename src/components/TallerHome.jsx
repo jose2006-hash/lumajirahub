@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { collection, query, where, onSnapshot, orderBy } from "firebase/firestore";
 import { db } from "../firebase";
-import { SERVICES, DEBT_LIMIT_DAYS } from "../config";
+import { serviceForOrder, DEBT_LIMIT_DAYS } from "../config";
 import Nav from "./Nav";
 
 export default function TallerHome({ ctx }) {
@@ -81,7 +81,7 @@ export default function TallerHome({ ctx }) {
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               {openOrders.map((order) => {
                 const alreadySent = myQuotes.find((q) => q.orderId === order.id);
-                const svc = SERVICES.find((s) => s.id === order.service);
+                const svc = serviceForOrder(order);
                 return (
                   <div key={order.id} className="card" style={{ padding: 24, borderLeft: `3px solid ${svc?.accent || "#F97316"}` }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>

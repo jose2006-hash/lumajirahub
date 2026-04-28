@@ -1,7 +1,7 @@
 {
   "name": "LumajiraHub",
   "short_name": "LumajiraHub",
-  "description": "Conectamos proyectos con talleres de manufactura en Lima",
+  "description": "Reparación y fabricación de piezas metalmecánicas en Lima",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#09090B",

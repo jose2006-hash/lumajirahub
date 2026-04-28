@@ -4,7 +4,7 @@ import {
   doc, getDoc, updateDoc,
 } from "firebase/firestore";
 import { db } from "../firebase";
-import { SERVICES } from "../config";
+import { serviceForOrder } from "../config";
 import Nav from "./Nav";
 
 // Convierte cualquier valor a string de forma segura
@@ -112,7 +112,7 @@ export default function MyOrders({ ctx }) {
           <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
             {orders.map((order) => {
               const myQ = quotes.filter((q) => q.orderId === order.id);
-              const svc = SERVICES.find((s) => s.id === order.service);
+              const svc = serviceForOrder(order);
               const titulo = safe(order.brief?.titulo || order.serviceName);
               const descripcion = truncate(order.brief?.descripcion);
               return (

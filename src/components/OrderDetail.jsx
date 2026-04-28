@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
-import { SERVICES } from "../config";
+import { serviceForOrder } from "../config";
 import Nav from "./Nav";
 
 export default function OrderDetail({ ctx }) {
@@ -11,7 +11,7 @@ export default function OrderDetail({ ctx }) {
   const set = (k, v) => setF((p) => ({ ...p, [k]: v }));
 
   if (!order) return null;
-  const svc = SERVICES.find((s) => s.id === order.service);
+  const svc = serviceForOrder(order);
 
   const submit = async (e) => {
     e.preventDefault();

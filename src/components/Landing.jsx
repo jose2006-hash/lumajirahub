@@ -72,13 +72,13 @@ export default function Landing({ ctx }) {
               <div className="u1" style={{ textAlign:"center", marginBottom:36 }}>
                 <div style={{ display:"inline-flex", alignItems:"center", gap:6, background:"#18181B", border:"1px solid #27272A", borderRadius:20, padding:"5px 14px", marginBottom:20 }}>
                   <span style={{ width:6, height:6, borderRadius:"50%", background:"#30D158", display:"inline-block" }}/>
-                  <span style={{ fontSize:11, fontWeight:600, color:"#636366", textTransform:"uppercase", letterSpacing:".1em" }}>Lima · Manufactura a medida</span>
+                  <span style={{ fontSize:11, fontWeight:600, color:"#636366", textTransform:"uppercase", letterSpacing:".1em" }}>Lima · Metalmecánica</span>
                 </div>
                 <h1 style={{ fontFamily:"DM Serif Display,serif", fontSize:"clamp(34px,8vw,52px)", lineHeight:1.05, letterSpacing:"-.03em", color:"#FAFAFA", marginBottom:12 }}>
                   ¿Cómo puedo<br/>ayudarte hoy?
                 </h1>
                 <p style={{ fontSize:14, color:"#636366", lineHeight:1.6 }}>
-                  Conectamos proyectos con talleres reales.
+                  Reparación y fabricación de piezas con talleres reales.
                 </p>
               </div>
 
@@ -86,7 +86,7 @@ export default function Landing({ ctx }) {
                 <div className="rc" onClick={()=>setMode("cliente")}>
                   <div style={{ fontSize:38, marginBottom:10 }}>👤</div>
                   <div style={{ fontWeight:700, fontSize:15, color:"#FAFAFA", marginBottom:5 }}>Soy Cliente</div>
-                  <div style={{ fontSize:12, color:"#636366", lineHeight:1.5 }}>Necesito fabricar algo</div>
+                  <div style={{ fontSize:12, color:"#636366", lineHeight:1.5 }}>Reparar o fabricar piezas</div>
                 </div>
                 <div className="rc" onClick={()=>setMode("taller")}>
                   <div style={{ fontSize:38, marginBottom:10 }}>🏭</div>

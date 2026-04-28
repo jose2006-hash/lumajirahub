@@ -1,6 +1,6 @@
 # LumajiraHub 🏭
 
-Plataforma que conecta clientes con talleres de manufactura en Lima — sin intermediarios.
+Plataforma que conecta clientes con talleres de metalmecánica en Lima (reparación y fabricación de piezas) — sin intermediarios.
 
 ---
 
@@ -70,7 +70,7 @@ También puedes ingresarla directamente en la app con el botón 🔑 en la barra
 | Registro usuario (nombre, WhatsApp, correo, contraseña) | ✅ Firebase Auth |
 | Registro taller (nombre, nombre taller, WhatsApp, correo) | ✅ Firebase Auth |
 | Contraseña mostrada en pantalla al registrarse | ✅ Modal con botón copiar |
-| 4 servicios: 3D, CNC, Láser, Plástico | ✅ |
+| Servicio: Metalmecánica (reparación y fabricación) | ✅ |
 | Chatbot IA GPT-4o genera brief técnico | ✅ |
 | Adjuntar imágenes y audio al pedido | ✅ |
 | Pedidos guardados en Firestore | ✅ Persistente |

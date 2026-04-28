@@ -2,7 +2,7 @@ import Nav from "./Nav";
 import { SERVICES } from "../config";
 
 export default function UserHome({ ctx }) {
-  const svc = SERVICES[0]; // Solo impresión 3D
+  const svc = SERVICES[0];
 
   return (
     <div style={{ minHeight:"100vh", background:"#09090B" }}>
@@ -15,10 +15,10 @@ export default function UserHome({ ctx }) {
             Hola, {ctx.user?.name} 👋
           </div>
           <h1 style={{ fontFamily:"DM Serif Display,serif", fontSize:"clamp(28px,5vw,42px)", lineHeight:1.1, letterSpacing:"-.02em", color:"#FAFAFA", marginBottom:10 }}>
-            ¿Qué necesitas<br/>imprimir hoy?
+            ¿Qué pieza necesitas<br/>reparar o fabricar?
           </h1>
           <p style={{ fontSize:14, color:"#636366", lineHeight:1.6 }}>
-            Describe tu idea y te conectamos con talleres de impresión 3D en Lima.
+            Cuéntanos el trabajo y te conectamos con talleres de metalmecánica en Lima.
           </p>
         </div>
 
@@ -37,20 +37,20 @@ export default function UserHome({ ctx }) {
         >
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:18 }}>
             <div style={{ width:48, height:48, borderRadius:14, background:`${svc.accent}18`, border:`1px solid ${svc.accent}30`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, color:svc.accent }}>
-              ▲
+              {svc.icon}
             </div>
             <span style={{ fontSize:12, fontWeight:600, color:svc.accent, background:`${svc.accent}15`, padding:"5px 12px", borderRadius:20 }}>
               Disponible ahora
             </span>
           </div>
           <div style={{ fontFamily:"DM Serif Display,serif", fontSize:22, color:"#FAFAFA", marginBottom:8 }}>
-            Impresión 3D
+            Metalmecánica
           </div>
           <div style={{ fontSize:14, color:"#636366", lineHeight:1.6, marginBottom:20 }}>
-            Figuras, prototipos, piezas funcionales, llaveros, maquetas y más. FDM, SLA y SLS.
+            Reparación de piezas dañadas, refacciones, mecanizado a medida, soldadura y fabricación por plano.
           </div>
           <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:20 }}>
-            {["Figuras","Prototipos","Piezas funcionales","Llaveros","Maquetas"].map(tag=>(
+            {["Reparación","Fabricación","Torno / fresa","Soldadura","Piezas únicas"].map(tag=>(
               <span key={tag} style={{ fontSize:11, background:"#27272A", color:"#AEAEB2", padding:"4px 10px", borderRadius:6 }}>{tag}</span>
             ))}
           </div>
