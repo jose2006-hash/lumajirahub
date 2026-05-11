@@ -3,7 +3,7 @@ import { useCollection } from '../hooks/useCollection'
 import { buyersQuery, addBuyer, deleteBuyer } from '../lib/firebase'
 import { MACHINE_TIPOS, MOTOR_TIPOS, ALL_BUYER_PRESET_TIPOS, fmtUSD, normalizeTipo } from '../utils/pricing'
 
-const DEF = { nombre:'', empresa:'', telefono:'', email:'', tipos:[], presupuesto:0, notas:'' }
+const DEF = { nombre:'', empresa:'', telefono:'', email:'', tipos:[], notas:'' }
 
 export default function BuyerCRM() {
   const { data: buyers, loading, error } = useCollection(buyersQuery)
@@ -13,7 +13,7 @@ export default function BuyerCRM() {
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
 
-  const set = k => e => setF(p => ({ ...p, [k]: k==='presupuesto' ? parseFloat(e.target.value)||0 : e.target.value }))
+  const set = k => e => setF(p => ({ ...p, [k]: e.target.value }))
 
   const toggleTipo = tipo => setF(p => ({
     ...p,
@@ -110,10 +110,6 @@ export default function BuyerCRM() {
                   ))}
                 </div>
               )}
-            </div>
-            <div className="form-group">
-              <label className="form-label">Presupuesto máximo (USD)</label>
-              <input className="inp inp-mono" type="number" min="0" value={f.presupuesto||''} onChange={set('presupuesto')} placeholder="0" />
             </div>
             <div className="form-group">
               <label className="form-label">Notas</label>
