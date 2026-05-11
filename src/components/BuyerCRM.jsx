@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useCollection } from '../hooks/useCollection'
 import { buyersQuery, addBuyer, deleteBuyer } from '../lib/firebase'
-import { MACHINE_TIPOS, fmtUSD } from '../utils/pricing'
+import { MACHINE_TIPOS, fmtUSD, normalizeTipo } from '../utils/pricing'
 
 const DEF = { nombre:'', empresa:'', telefono:'', email:'', tipos:[], presupuesto:0, notas:'' }
 
@@ -9,6 +9,7 @@ export default function BuyerCRM() {
   const { data: buyers, loading, error } = useCollection(buyersQuery)
   const [showForm, setShowForm] = useState(false)
   const [f, setF] = useState(DEF)
+  const [customTipoDraft, setCustomTipoDraft] = useState('')
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
 
@@ -18,6 +19,15 @@ export default function BuyerCRM() {
     ...p,
     tipos: p.tipos.includes(tipo) ? p.tipos.filter(t => t !== tipo) : [...p.tipos, tipo]
   }))
+
+  const addCustomTipo = () => {
+    const t = customTipoDraft.trim()
+    if (!t) return
+    const dup = f.tipos.some((x) => normalizeTipo(x) === normalizeTipo(t))
+    if (dup) { setCustomTipoDraft(''); return }
+    setF((p) => ({ ...p, tipos: [...p.tipos, t] }))
+    setCustomTipoDraft('')
+  }
 
   const handleAdd = async () => {
     if (!f.nombre.trim()) { alert('Ingresa el nombre'); return }
@@ -64,11 +74,33 @@ export default function BuyerCRM() {
             </div>
             <div className="form-group">
               <label className="form-label">Tipos de máquina de interés</label>
+              <div style={{fontSize:11,color:'var(--t3)',marginBottom:6}}>Sugeridos — también puedes añadir tipos propios abajo; se guardan igual y cruzan con el registro de máquinas.</div>
               <div style={{display:'flex',gap:7,flexWrap:'wrap',marginTop:6}}>
                 {MACHINE_TIPOS.map(t => (
-                  <button key={t} className={`filter-chip${f.tipos.includes(t)?' active':''}`} onClick={() => toggleTipo(t)}>{t}</button>
+                  <button type="button" key={t} className={`filter-chip${f.tipos.includes(t)?' active':''}`} onClick={() => toggleTipo(t)}>{t}</button>
                 ))}
               </div>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Otros tipos (manual)</label>
+              <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
+                <input
+                  className="inp"
+                  style={{flex:'1 1 200px',minWidth:160}}
+                  placeholder="Ej. Prensa hidráulica, rectificadora…"
+                  value={customTipoDraft}
+                  onChange={(e) => setCustomTipoDraft(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomTipo() } }}
+                />
+                <button type="button" className="btn btn-primary btn-sm" onClick={addCustomTipo}>+ Añadir</button>
+              </div>
+              {f.tipos.filter((t) => !MACHINE_TIPOS.includes(t)).length > 0 && (
+                <div style={{display:'flex',gap:7,flexWrap:'wrap',marginTop:10}}>
+                  {f.tipos.filter((t) => !MACHINE_TIPOS.includes(t)).map((t) => (
+                    <button type="button" key={t} className="filter-chip active" onClick={() => toggleTipo(t)} title="Clic para quitar">{t} ✕</button>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="form-group">
               <label className="form-label">Presupuesto máximo (USD)</label>

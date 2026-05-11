@@ -3,7 +3,7 @@ import { useCollection } from '../hooks/useCollection'
 import { machinesQuery, updateMachine, deleteMachine, addLead } from '../lib/firebase'
 import { buyersQuery } from '../lib/firebase'
 import { generateWhatsAppMessage } from '../lib/openai'
-import { fmtUSD, ESTADO_CONFIG, timeAgo } from '../utils/pricing'
+import { fmtUSD, ESTADO_CONFIG, timeAgo, buyerMatchesMachineTipo } from '../utils/pricing'
 
 const FILTERS = ['Todos','Registrada','Publicada','Con leads','En negociación','Vendida','Retirada']
 
@@ -26,7 +26,7 @@ export default function Catalog() {
 
   const openNotify = async (m) => {
     setNotify(m); setMsg('')
-    const matching = buyers.filter(b => b.tipos?.includes(m.tipo))
+    const matching = buyers.filter((b) => buyerMatchesMachineTipo(b, m.tipo))
     if (matching.length > 0) {
       setGenLoad(true)
       try { const txt = await generateWhatsAppMessage({ machine: m, buyerName: matching[0].nombre }); setMsg(txt) }
@@ -123,7 +123,7 @@ export default function Catalog() {
             <div className="divider" />
             <div style={{fontSize:12,color:'var(--t3)'}}>
               Compradores con interés en <strong style={{color:'var(--t2)'}}>{notify.tipo}</strong>:{' '}
-              {buyers.filter(b => b.tipos?.includes(notify.tipo)).map(b => b.nombre).join(', ') || 'Ninguno registrado aún'}
+              {buyers.filter((b) => buyerMatchesMachineTipo(b, notify.tipo)).map((b) => b.nombre).join(', ') || 'Ninguno registrado aún'}
             </div>
           </div>
         </div>

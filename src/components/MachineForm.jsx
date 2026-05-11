@@ -2,12 +2,7 @@ import { useState, useRef } from 'react'
 import { addMachine, addLead, uploadMachineImage, buyersQuery } from '../lib/firebase'
 import { generateDescription } from '../lib/openai'
 import { useCollection } from '../hooks/useCollection'
-
-const MACHINE_TIPOS = [
-  'Excavadora','Retroexcavadora','Grúa','Compactadora','Bulldozer',
-  'Cargador frontal','Montacargas','Motoniveladora','Perforadora',
-  'Torno','Fresadora','Camión minero','Otro'
-]
+import { MACHINE_TIPOS, buyerMatchesMachineTipo } from '../utils/pricing'
 
 const COMPANY_WA = '51935211605'
 
@@ -27,7 +22,7 @@ export default function MachineForm({ setTab }) {
   const { data: buyers } = useCollection(buyersQuery)
 
   const [f, setF] = useState({
-    tipo:             'Excavadora',
+    tipo:             MACHINE_TIPOS[0] || '',
     marca:            '',
     modelo:           '',
     anio:             new Date().getFullYear() - 3,
@@ -56,7 +51,7 @@ export default function MachineForm({ setTab }) {
   const pv      = parseFloat(f.pvendedor) || 0
   const pricing = calcPricing(pv, f.needsMaintenance)
 
-  const matchingBuyers = buyers.filter(b => b.tipos?.includes(f.tipo))
+  const matchingBuyers = buyers.filter((b) => buyerMatchesMachineTipo(b, f.tipo))
 
   const waText = (buyerName) =>
     encodeURIComponent(
@@ -155,9 +150,22 @@ export default function MachineForm({ setTab }) {
               <div className="inp-row">
                 <div className="form-group">
                   <label className="form-label">Tipo</label>
-                  <select className="inp" value={f.tipo} onChange={set('tipo')}>
-                    {MACHINE_TIPOS.map(t => <option key={t}>{t}</option>)}
-                  </select>
+                  <input
+                    className="inp"
+                    list="machine-tipo-presets"
+                    placeholder="Escribe o elige de la lista…"
+                    value={f.tipo}
+                    onChange={set('tipo')}
+                    autoComplete="off"
+                  />
+                  <datalist id="machine-tipo-presets">
+                    {MACHINE_TIPOS.map((t) => (
+                      <option key={t} value={t} />
+                    ))}
+                  </datalist>
+                  <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 5 }}>
+                    Mismo criterio que en Compradores: si coincide con un interés (incl. tipos añadidos a mano), se notifica.
+                  </div>
                 </div>
                 <div className="form-group">
                   <label className="form-label">Año</label>

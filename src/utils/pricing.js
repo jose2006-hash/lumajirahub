@@ -19,7 +19,31 @@ export function checkViability({ ppublicado, pmercado, margenReal, margenMinimo 
 const fmt = n => Number(n).toLocaleString('en-US')
 export const fmtUSD = n => `$${Number(n||0).toLocaleString('en-US')}`
 
-export const MACHINE_TIPOS = ['Excavadora','Retroexcavadora','Grúa','Compactadora','Bulldozer','Cargador frontal','Montacargas','Motoniveladora','Perforadora','Camión minero','Otro']
+/** Tipos sugeridos (compradores y registro de máquina); siempre se puede escribir uno distinto. */
+export const MACHINE_TIPOS = [
+  'Excavadora', 'Retroexcavadora', 'Grúa', 'Compactadora', 'Bulldozer',
+  'Cargador frontal', 'Montacargas', 'Motoniveladora', 'Perforadora',
+  'Torno', 'Fresadora', 'Camión minero',
+]
+
+export function normalizeTipo(s) {
+  return String(s ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+/** Cruza interés del comprador con el tipo de máquina publicado (incluye variantes tipo "Torno" vs "Torno paralelo"). */
+export function tiposCoinciden(buyerTag, machineTipo) {
+  const a = normalizeTipo(buyerTag)
+  const b = normalizeTipo(machineTipo)
+  if (!a || !b) return false
+  if (a === b) return true
+  if (a.length >= 3 && b.includes(a)) return true
+  if (b.length >= 3 && a.includes(b)) return true
+  return false
+}
+
+export function buyerMatchesMachineTipo(buyer, machineTipo) {
+  return (buyer.tipos || []).some((bt) => tiposCoinciden(bt, machineTipo))
+}
 
 export const ESTADO_CONFIG = {
   'Registrada':      { color:'#6b7280', bg:'rgba(107,114,128,0.12)', next:'Publicada' },
