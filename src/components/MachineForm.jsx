@@ -2,7 +2,7 @@ import { useState, useRef } from 'react'
 import { addMachine, addLead, uploadMachineImage, buyersQuery } from '../lib/firebase'
 import { generateDescription } from '../lib/openai'
 import { useCollection } from '../hooks/useCollection'
-import { MACHINE_TIPOS, ALL_BUYER_PRESET_TIPOS, buyerMatchesMachineTipo } from '../utils/pricing'
+import { MACHINE_TIPOS, MOTOR_TIPOS, ALL_BUYER_PRESET_TIPOS, buyerMatchesMachineTipo } from '../utils/pricing'
 
 const COMPANY_WA = '51935211605'
 
@@ -165,6 +165,24 @@ export default function MachineForm({ setTab }) {
                   </datalist>
                   <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 5 }}>
                     Mismo criterio que en Compradores: si coincide con un interés (incl. tipos añadidos a mano), se notifica.
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Motores</label>
+                  <div style={{ fontSize: 11, color: 'var(--t3)', marginBottom: 6 }}>
+                    Selecciona un motor rápido o escribe otro tipo en el campo Tipo.
+                  </div>
+                  <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginTop: 6 }}>
+                    {MOTOR_TIPOS.map((t) => (
+                      <button
+                        type="button"
+                        key={t}
+                        className={`filter-chip${f.tipo === t ? ' active' : ''}`}
+                        onClick={() => setF(p => ({ ...p, tipo: t }))}
+                      >
+                        {t}
+                      </button>
+                    ))}
                   </div>
                 </div>
                 <div className="form-group">
