@@ -26,6 +26,20 @@ export const MACHINE_TIPOS = [
   'Torno', 'Fresadora', 'Camión minero',
 ]
 
+/** Motores — misma lista `tipos` del comprador; cruce con tipo al publicar máquina. */
+export const MOTOR_TIPOS = [
+  'Motor diésel',
+  'Motor gasolina',
+  'Motor eléctrico',
+  'Motor marino',
+  'Motor industrial estacionario',
+  'Grupo electrógeno',
+  'Turbo / turbocompresor',
+]
+
+/** Presets que no deben mostrarse como “solo manual” en el formulario comprador. */
+export const ALL_BUYER_PRESET_TIPOS = [...MACHINE_TIPOS, ...MOTOR_TIPOS]
+
 export function normalizeTipo(s) {
   return String(s ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
 }

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useCollection } from '../hooks/useCollection'
 import { buyersQuery, addBuyer, deleteBuyer } from '../lib/firebase'
-import { MACHINE_TIPOS, fmtUSD, normalizeTipo } from '../utils/pricing'
+import { MACHINE_TIPOS, MOTOR_TIPOS, ALL_BUYER_PRESET_TIPOS, fmtUSD, normalizeTipo } from '../utils/pricing'
 
 const DEF = { nombre:'', empresa:'', telefono:'', email:'', tipos:[], presupuesto:0, notas:'' }
 
@@ -32,7 +32,7 @@ export default function BuyerCRM() {
   const handleAdd = async () => {
     if (!f.nombre.trim()) { alert('Ingresa el nombre'); return }
     setSaving(true)
-    try { await addBuyer(f); setF(DEF); setShowForm(false) }
+    try { await addBuyer(f); setF(DEF); setCustomTipoDraft(''); setShowForm(false) }
     catch(e) { alert('Error: ' + e.message) }
     setSaving(false)
   }
@@ -82,6 +82,15 @@ export default function BuyerCRM() {
               </div>
             </div>
             <div className="form-group">
+              <label className="form-label">Motores</label>
+              <div style={{fontSize:11,color:'var(--t3)',marginBottom:6}}>Interés en equipos de potencia; se guarda en la misma lista y cruza si publicas una máquina con ese tipo.</div>
+              <div style={{display:'flex',gap:7,flexWrap:'wrap',marginTop:6}}>
+                {MOTOR_TIPOS.map((t) => (
+                  <button type="button" key={t} className={`filter-chip${f.tipos.includes(t) ? ' active' : ''}`} onClick={() => toggleTipo(t)}>{t}</button>
+                ))}
+              </div>
+            </div>
+            <div className="form-group">
               <label className="form-label">Otros tipos (manual)</label>
               <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
                 <input
@@ -94,9 +103,9 @@ export default function BuyerCRM() {
                 />
                 <button type="button" className="btn btn-primary btn-sm" onClick={addCustomTipo}>+ Añadir</button>
               </div>
-              {f.tipos.filter((t) => !MACHINE_TIPOS.includes(t)).length > 0 && (
+              {f.tipos.filter((t) => !ALL_BUYER_PRESET_TIPOS.includes(t)).length > 0 && (
                 <div style={{display:'flex',gap:7,flexWrap:'wrap',marginTop:10}}>
-                  {f.tipos.filter((t) => !MACHINE_TIPOS.includes(t)).map((t) => (
+                  {f.tipos.filter((t) => !ALL_BUYER_PRESET_TIPOS.includes(t)).map((t) => (
                     <button type="button" key={t} className="filter-chip active" onClick={() => toggleTipo(t)} title="Clic para quitar">{t} ✕</button>
                   ))}
                 </div>
@@ -114,7 +123,7 @@ export default function BuyerCRM() {
               <button className="btn btn-primary" onClick={handleAdd} disabled={saving}>
                 {saving ? <><span className="spinner" /> Guardando…</> : '✓ Guardar comprador'}
               </button>
-              <button className="btn btn-ghost" onClick={() => { setShowForm(false); setF(DEF) }}>Cancelar</button>
+              <button className="btn btn-ghost" onClick={() => { setShowForm(false); setF(DEF); setCustomTipoDraft('') }}>Cancelar</button>
             </div>
           </div>
         </div>

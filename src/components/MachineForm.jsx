@@ -2,7 +2,7 @@ import { useState, useRef } from 'react'
 import { addMachine, addLead, uploadMachineImage, buyersQuery } from '../lib/firebase'
 import { generateDescription } from '../lib/openai'
 import { useCollection } from '../hooks/useCollection'
-import { MACHINE_TIPOS, buyerMatchesMachineTipo } from '../utils/pricing'
+import { MACHINE_TIPOS, ALL_BUYER_PRESET_TIPOS, buyerMatchesMachineTipo } from '../utils/pricing'
 
 const COMPANY_WA = '51935211605'
 
@@ -159,7 +159,7 @@ export default function MachineForm({ setTab }) {
                     autoComplete="off"
                   />
                   <datalist id="machine-tipo-presets">
-                    {MACHINE_TIPOS.map((t) => (
+                    {ALL_BUYER_PRESET_TIPOS.map((t) => (
                       <option key={t} value={t} />
                     ))}
                   </datalist>
