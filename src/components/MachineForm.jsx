@@ -3,8 +3,10 @@ import { addMachine, addLead, uploadMachineImage, buyersQuery } from '../lib/fir
 import { generateDescription } from '../lib/openai'
 import { useCollection } from '../hooks/useCollection'
 import { MACHINE_TIPOS, MOTOR_TIPOS, ALL_BUYER_PRESET_TIPOS, buyerMatchesMachineTipo } from '../utils/pricing'
+import { notifyAllBuyers } from '../lib/emailService'   // ← NUEVO
 
 const COMPANY_WA = '51935211605'
+const COMPANY_EMAIL = 'aynitek.group@gmail.com'         // ← NUEVO
 
 function fmtPEN(n) {
   return `S/ ${Number(n || 0).toLocaleString('es-PE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
@@ -33,10 +35,11 @@ export default function MachineForm({ setTab }) {
     needsMaintenance: false,
   })
 
-  const [imgs,      setImgs]      = useState([])
-  const [saving,    setSaving]    = useState(false)
-  const [aiLoading, setAiLoading] = useState(false)
-  const [aiError,   setAiError]   = useState('')
+  const [imgs,       setImgs]       = useState([])
+  const [saving,     setSaving]     = useState(false)
+  const [saveStatus, setSaveStatus] = useState('')   // ← NUEVO: feedback de progreso
+  const [aiLoading,  setAiLoading]  = useState(false)
+  const [aiError,    setAiError]    = useState('')
   const fileRef = useRef()
 
   const set = k => e => setF(p => ({
@@ -53,6 +56,7 @@ export default function MachineForm({ setTab }) {
 
   const matchingBuyers = buyers.filter((b) => buyerMatchesMachineTipo(b, f.tipo))
 
+  // ─── Texto WhatsApp ───────────────────────────────────────────────────────
   const waText = (buyerName) =>
     encodeURIComponent(
       `Hola ${buyerName}, te contacta LumajiraHub 📞 935211605.\n\n` +
@@ -64,11 +68,22 @@ export default function MachineForm({ setTab }) {
       `\n¿Te interesa? Escríbenos para coordinar una visita.`
     )
 
+  // ─── Selección de archivos ────────────────────────────────────────────────
   const handleFiles = e => {
     const files = Array.from(e.target.files)
     setImgs(p => [...p, ...files.map(file => ({ file, url: URL.createObjectURL(file) }))])
+    // Limpia el input para que el mismo archivo pueda volver a elegirse
+    e.target.value = ''
   }
 
+  // ─── Drag & drop ──────────────────────────────────────────────────────────
+  const handleDrop = e => {
+    e.preventDefault()
+    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'))
+    setImgs(p => [...p, ...files.map(file => ({ file, url: URL.createObjectURL(file) }))])
+  }
+
+  // ─── IA descripción ───────────────────────────────────────────────────────
   const runAI = async () => {
     setAiLoading(true); setAiError('')
     try {
@@ -81,11 +96,16 @@ export default function MachineForm({ setTab }) {
     setAiLoading(false)
   }
 
+  // ─── PUBLICAR ─────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
     if (!f.marca.trim() || !f.modelo.trim()) { alert('Completa Marca y Modelo'); return }
     if (pv <= 0) { alert('Ingresa el precio neto al vendedor en soles'); return }
+
     setSaving(true)
+    setSaveStatus('Guardando máquina…')
+
     try {
+      // 1️⃣  Crear documento en Firestore
       const docData = {
         ...f,
         pvendedor: pv,
@@ -94,39 +114,89 @@ export default function MachineForm({ setTab }) {
         estado: 'Publicada',
         fotos:  [],
       }
-      const ref       = await addMachine(docData)
-      const machineId = ref.id
+      const docRef    = await addMachine(docData)
+      const machineId = docRef.id
 
-      // Subir fotos a Firebase Storage
+      // 2️⃣  Subir fotos a Firebase Storage
       const fotoUrls = []
-      for (const img of imgs) {
-        try {
-          const url = await uploadMachineImage(img.file, machineId)
-          fotoUrls.push(url)
-        } catch (e) { console.warn('Error subiendo imagen', e) }
-      }
-      if (fotoUrls.length > 0) {
-        const { updateMachine } = await import('../lib/firebase')
-        await updateMachine(machineId, { fotos: fotoUrls })
+      if (imgs.length > 0) {
+        setSaveStatus(`Subiendo ${imgs.length} foto(s)…`)
+        for (const img of imgs) {
+          try {
+            const url = await uploadMachineImage(img.file, machineId)
+            fotoUrls.push(url)
+          } catch (e) {
+            console.warn('Error subiendo imagen:', e)
+          }
+        }
+        if (fotoUrls.length > 0) {
+          const { updateMachine } = await import('../lib/firebase')
+          await updateMachine(machineId, { fotos: fotoUrls })
+        }
       }
 
-      // Registrar en leads
+      // 3️⃣  Enviar emails automáticos a compradores coincidentes
+      let emailsSent = 0
+      const buyersWithEmail = matchingBuyers.filter(b => b.email)
+      if (buyersWithEmail.length > 0) {
+        setSaveStatus(`Enviando ${buyersWithEmail.length} email(s)…`)
+        const result = await notifyAllBuyers({
+          buyers:   matchingBuyers,
+          tipo:     f.tipo,
+          marca:    f.marca,
+          modelo:   f.modelo,
+          anio:     f.anio,
+          estado_op: f.estado_op,
+          precio:   fmtPEN(pricing.ppublicado),
+        })
+        emailsSent = result.sent
+      }
+
+      // 4️⃣  Registrar en leads
       await addLead({
         maquinaNombre: `${f.tipo} ${f.marca} ${f.modelo} (${f.anio})`,
         comprador:     'Sistema',
-        accion:        `✅ Publicada — ${matchingBuyers.length} compradores notificados por WA y email`,
+        accion:        `✅ Publicada — ${matchingBuyers.length} compradores notificados` +
+                       (emailsSent > 0 ? ` (${emailsSent} emails enviados desde ${COMPANY_EMAIL})` : ' por WA'),
         color:         '#22c55e',
       })
 
+      // 5️⃣  Abrir WhatsApp para compradores sin email (o todos si se prefiere)
+      const buyersOnlyWA = matchingBuyers.filter(b => b.telefono && !b.email)
+      if (buyersOnlyWA.length > 0) {
+        // Abre el primero automáticamente; el resto quedan en la lista para hacer clic
+        const first = buyersOnlyWA[0]
+        window.open(
+          `https://wa.me/${first.telefono.replace(/\D/g, '')}?text=${waText(first.nombre)}`,
+          '_blank'
+        )
+      }
+
+      // 6️⃣  Mensaje final
+      const fotos  = fotoUrls.length
+      const emails = emailsSent
+      const was    = matchingBuyers.filter(b => b.telefono).length
+
       alert(
-        `✅ Máquina publicada a ${fmtPEN(pricing.ppublicado)}.\n` +
-        `${matchingBuyers.length} comprador(es) serán notificados por WhatsApp y email.`
+        `✅ Máquina publicada a ${fmtPEN(pricing.ppublicado)}.\n\n` +
+        `📷 Fotos subidas: ${fotos}/${imgs.length}\n` +
+        `📧 Emails enviados: ${emails} de ${COMPANY_EMAIL}\n` +
+        `📲 WhatsApp listos: ${was} (haz clic en cada botón WA)\n\n` +
+        (buyersOnlyWA.length > 0
+          ? `Se abrió WhatsApp para ${buyersOnlyWA[0].nombre}. Los demás están en la lista.`
+          : '')
       )
+
       setTab('catalogo')
-    } catch (e) { alert('Error: ' + e.message) }
+    } catch (e) {
+      alert('Error al publicar: ' + e.message)
+    }
+
     setSaving(false)
+    setSaveStatus('')
   }
 
+  // ─── RENDER ───────────────────────────────────────────────────────────────
   return (
     <div>
       <div className="page-header">
@@ -238,26 +308,100 @@ export default function MachineForm({ setTab }) {
             </div>
           </div>
 
+          {/* ─── FOTOS ─── */}
           <div className="card">
-            <div className="card-title">Fotos</div>
-            <div className="upload-zone" onClick={() => fileRef.current?.click()}>
+            <div className="card-title">
+              Fotos
+              {imgs.length > 0 && (
+                <span style={{
+                  marginLeft: 8, fontSize: 11, fontWeight: 600,
+                  color: 'var(--ok)', background: 'rgba(34,197,94,0.1)',
+                  border: '1px solid rgba(34,197,94,0.2)',
+                  padding: '1px 8px', borderRadius: 20,
+                }}>
+                  {imgs.length} foto{imgs.length !== 1 ? 's' : ''} listas
+                </span>
+              )}
+            </div>
+
+            {/* Zona de carga con drag & drop */}
+            <div
+              className="upload-zone"
+              onClick={() => fileRef.current?.click()}
+              onDrop={handleDrop}
+              onDragOver={e => e.preventDefault()}
+              style={{ cursor: 'pointer' }}
+            >
               <div style={{ fontSize: 28, marginBottom: 6 }}>📷</div>
-              <div style={{ fontSize: 13 }}>Haz clic para agregar fotos</div>
+              <div style={{ fontSize: 13 }}>
+                Haz clic o arrastra fotos aquí
+              </div>
               <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 4 }}>
-                Se subirán a Firebase Storage automáticamente
+                JPG, PNG, WEBP · Se subirán a Firebase Storage al publicar
               </div>
             </div>
-            <input ref={fileRef} type="file" accept="image/*" multiple
-                   style={{ display: 'none' }} onChange={handleFiles} />
+
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              multiple
+              style={{ display: 'none' }}
+              onChange={handleFiles}
+            />
+
+            {/* Previews */}
             {imgs.length > 0 && (
-              <div className="img-previews">
+              <div className="img-previews" style={{ marginTop: 12 }}>
                 {imgs.map((img, i) => (
-                  <div key={i} className="img-preview-wrap">
-                    <img src={img.url} alt="" />
-                    <button className="img-remove"
-                            onClick={() => setImgs(p => p.filter((_, j) => j !== i))}>✕</button>
+                  <div key={i} className="img-preview-wrap" style={{ position: 'relative' }}>
+                    <img
+                      src={img.url}
+                      alt={`Foto ${i + 1}`}
+                      style={{
+                        width: 90, height: 90, objectFit: 'cover',
+                        borderRadius: 8, border: '2px solid var(--border)',
+                        display: 'block',
+                      }}
+                    />
+                    <button
+                      className="img-remove"
+                      title="Quitar foto"
+                      onClick={() => setImgs(p => p.filter((_, j) => j !== i))}
+                      style={{
+                        position: 'absolute', top: -6, right: -6,
+                        background: 'var(--err)', color: '#fff',
+                        border: 'none', borderRadius: '50%',
+                        width: 22, height: 22, cursor: 'pointer',
+                        fontSize: 11, fontWeight: 700, lineHeight: '22px',
+                        textAlign: 'center', padding: 0,
+                      }}
+                    >✕</button>
+                    {i === 0 && (
+                      <span style={{
+                        position: 'absolute', bottom: 4, left: 4,
+                        background: 'rgba(0,0,0,0.65)', color: '#fff',
+                        fontSize: 9, fontWeight: 700, padding: '1px 5px',
+                        borderRadius: 4,
+                      }}>PORTADA</span>
+                    )}
                   </div>
                 ))}
+                {/* Botón añadir más */}
+                <div
+                  onClick={() => fileRef.current?.click()}
+                  style={{
+                    width: 90, height: 90, borderRadius: 8,
+                    border: '2px dashed var(--border)',
+                    display: 'flex', flexDirection: 'column',
+                    alignItems: 'center', justifyContent: 'center',
+                    cursor: 'pointer', color: 'var(--t3)', fontSize: 11,
+                    gap: 4,
+                  }}
+                >
+                  <span style={{ fontSize: 20 }}>＋</span>
+                  <span>Agregar</span>
+                </div>
               </div>
             )}
           </div>
@@ -269,7 +413,6 @@ export default function MachineForm({ setTab }) {
           {/* Precio del vendedor */}
           <div className="card">
             <div className="card-title">Precio del vendedor (soles)</div>
-
             <div className="form-group" style={{ marginBottom: 14 }}>
               <label className="form-label">¿Cuánto quiere recibir el vendedor?</label>
               <div style={{ position: 'relative' }}>
@@ -289,7 +432,6 @@ export default function MachineForm({ setTab }) {
               </div>
             </div>
 
-            {/* Checkbox mantenimiento */}
             <div
               style={{
                 display: 'flex', alignItems: 'center', gap: 10,
@@ -310,9 +452,7 @@ export default function MachineForm({ setTab }) {
               </div>
               <div>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>Requiere mantenimiento</div>
-                <div style={{ fontSize: 11, color: 'var(--t3)' }}>
-                  Agrega +10% al precio de publicación
-                </div>
+                <div style={{ fontSize: 11, color: 'var(--t3)' }}>Agrega +10% al precio de publicación</div>
               </div>
             </div>
           </div>
@@ -320,7 +460,6 @@ export default function MachineForm({ setTab }) {
           {/* Precio de publicación */}
           <div className="card">
             <div className="card-title">Precio de publicación</div>
-
             <div className="pricing-table">
               <div className="pricing-row">
                 <span>Precio neto al vendedor</span>
@@ -328,37 +467,26 @@ export default function MachineForm({ setTab }) {
               </div>
               <div className="pricing-row sub">
                 <span>+ Marketing y publicidad (10%)</span>
-                <span className="amount" style={{ color: 'var(--warn)' }}>
-                  {fmtPEN(pricing.marketing)}
-                </span>
+                <span className="amount" style={{ color: 'var(--warn)' }}>{fmtPEN(pricing.marketing)}</span>
               </div>
               {f.needsMaintenance && (
                 <div className="pricing-row sub">
                   <span>+ Mantenimiento (10%)</span>
-                  <span className="amount" style={{ color: 'var(--warn)' }}>
-                    {fmtPEN(pricing.mantenimiento)}
-                  </span>
+                  <span className="amount" style={{ color: 'var(--warn)' }}>{fmtPEN(pricing.mantenimiento)}</span>
                 </div>
               )}
               <div className="pricing-row sub">
                 <span>+ Utilidad (15%)</span>
-                <span className="amount" style={{ color: 'var(--ok)' }}>
-                  {fmtPEN(pricing.utilidad)}
-                </span>
+                <span className="amount" style={{ color: 'var(--ok)' }}>{fmtPEN(pricing.utilidad)}</span>
               </div>
               <div className="pricing-row" style={{
                 background: 'var(--amberBg)',
                 borderTop: '2px solid rgba(245,158,11,0.4)',
               }}>
-                <span style={{ fontWeight: 700, color: 'var(--amberL)', fontSize: 14 }}>
-                  = Precio de publicación
-                </span>
-                <span className="amount" style={{ color: 'var(--amber)', fontSize: 20 }}>
-                  {fmtPEN(pricing.ppublicado)}
-                </span>
+                <span style={{ fontWeight: 700, color: 'var(--amberL)', fontSize: 14 }}>= Precio de publicación</span>
+                <span className="amount" style={{ color: 'var(--amber)', fontSize: 20 }}>{fmtPEN(pricing.ppublicado)}</span>
               </div>
             </div>
-
             {pv > 0 && (
               <div style={{
                 marginTop: 8, padding: '7px 12px',
@@ -386,17 +514,30 @@ export default function MachineForm({ setTab }) {
               }}>WhatsApp + Email</span>
             </div>
 
+            {/* Remitente */}
+            <div style={{
+              padding: '8px 10px', background: 'var(--bg2)',
+              borderRadius: 'var(--r-md)', fontSize: 12,
+              marginBottom: 10, display: 'flex', gap: 12, flexWrap: 'wrap',
+            }}>
+              <span>📲 <strong style={{ color: 'var(--t1)' }}>935211605</strong></span>
+              <span>📧 <strong style={{ color: 'var(--t1)' }}>{COMPANY_EMAIL}</strong></span>
+            </div>
+
             <div style={{ fontSize: 13, color: 'var(--t2)', marginBottom: 10, lineHeight: 1.6 }}>
-              Se enviará desde <strong style={{ color: 'var(--t1)', fontFamily: 'var(--mono)' }}>
-                📲 935211605
-              </strong> a{' '}
+              Se notificará a{' '}
               <strong style={{ color: matchingBuyers.length > 0 ? 'var(--ok)' : 'var(--err)' }}>
                 {matchingBuyers.length} comprador{matchingBuyers.length !== 1 ? 'es' : ''}
               </strong>{' '}
-              interesados en <strong style={{ color: 'var(--amber)' }}>{f.tipo}</strong>:
+              interesados en <strong style={{ color: 'var(--amber)' }}>{f.tipo || '—'}</strong>
+              {matchingBuyers.filter(b => b.email).length > 0 && (
+                <> · <span style={{ color: 'var(--info)' }}>
+                  {matchingBuyers.filter(b => b.email).length} email(s) automático(s)
+                </span></>
+              )}
             </div>
 
-            {/* Preview del mensaje */}
+            {/* Preview mensaje */}
             <div style={{
               background: 'var(--bg2)',
               border: '1px solid var(--border)',
@@ -436,6 +577,10 @@ export default function MachineForm({ setTab }) {
                     <div>
                       <span style={{ color: 'var(--t1)', fontWeight: 500 }}>{b.nombre}</span>
                       {b.empresa && <span style={{ color: 'var(--t3)' }}> · {b.empresa}</span>}
+                      <div style={{ marginTop: 2, display: 'flex', gap: 6 }}>
+                        {b.email  && <span style={{ color: 'var(--ok)',  fontSize: 10 }}>✓ email</span>}
+                        {b.telefono && <span style={{ color: '#25D366', fontSize: 10 }}>✓ WA</span>}
+                      </div>
                     </div>
                     <div style={{ display: 'flex', gap: 5 }}>
                       {b.telefono && (
@@ -453,7 +598,7 @@ export default function MachineForm({ setTab }) {
                       )}
                       {b.email && (
                         <a
-                          href={`mailto:${b.email}?subject=Nuevo equipo: ${f.tipo} ${f.marca} ${f.modelo}&body=Hola ${b.nombre},%0A%0ANuevo equipo disponible en LumajiraHub:%0A${f.tipo} ${f.marca} ${f.modelo} (${f.anio})%0APrecio: ${fmtPEN(pricing.ppublicado)}%0A%0AContacto: 935211605`}
+                          href={`mailto:${b.email}?subject=Nuevo equipo: ${f.tipo} ${f.marca} ${f.modelo}&body=Hola ${b.nombre},%0A%0ANuevo equipo disponible en LumajiraHub:%0A${f.tipo} ${f.marca} ${f.modelo} (${f.anio})%0APrecio: ${fmtPEN(pricing.ppublicado)}%0A%0AContacto: 935211605 | ${COMPANY_EMAIL}`}
                           style={{
                             background: 'var(--infoBg)', color: 'var(--info)',
                             padding: '2px 9px', borderRadius: 20,
@@ -474,12 +619,12 @@ export default function MachineForm({ setTab }) {
                 borderRadius: 'var(--r-md)', fontSize: 12, color: 'var(--err)',
               }}>
                 ⚠️ No hay compradores registrados para <strong>{f.tipo}</strong>.
-                Agrégalos en la sección Compradores antes de publicar.
+                Agrégalos en Compradores antes de publicar.
               </div>
             )}
           </div>
 
-          {/* Botón de publicar */}
+          {/* Botón publicar */}
           <button
             className="btn btn-primary btn-lg"
             style={{ width: '100%', fontSize: 16 }}
@@ -487,12 +632,21 @@ export default function MachineForm({ setTab }) {
             disabled={saving || pv <= 0}
           >
             {saving
-              ? <><span className="spinner" /> Publicando y notificando…</>
+              ? <><span className="spinner" /> {saveStatus || 'Publicando…'}</>
               : pricing.ppublicado > 0
               ? `✅ Publicar a ${fmtPEN(pricing.ppublicado)}`
               : '✅ Publicar máquina'
             }
           </button>
+
+          {saving && (
+            <div style={{
+              textAlign: 'center', fontSize: 12, color: 'var(--t3)',
+              animation: 'pulse 1.5s infinite',
+            }}>
+              {saveStatus}
+            </div>
+          )}
         </div>
       </div>
     </div>
